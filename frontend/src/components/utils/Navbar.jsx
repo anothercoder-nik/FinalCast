@@ -1,32 +1,55 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react'
+import { ThemeToggle } from '../ui/theme-toggle'
+import { Link } from '@tanstack/react-router'
+import { Button } from '../ui/button'
+import { LayoutDashboard } from 'lucide-react'
 
 const Navbar = () => {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   return (
-    <nav
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 border-r-2
-        ${scrolled
-          ? "bg-black/90 shadow-md"
-          : "bg-transparent"
-        }`}
-    >
-      <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center text-white">
-        <h1 className="text-lg font-bold">MySite</h1>
-        <ul className="flex gap-6">
-          <li className="hover:underline">Home</li>
-          <li className="hover:underline">About</li>
-          <li className="hover:underline">Contact</li>
-        </ul>
-      </div>
-    </nav>
-  );
-};
+    <header className='fixed top-6 left-1/2 transform -translate-x-1/2 z-50 text-nowrap'>
+      <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-full px-8 py-3 flex items-center justify-between gap-8">
+          <Link href="/" className="mr-10 md:mr-20 flex items-center">
+  <h1 className="text-3xl font-extrabold tracking-tight leading-none text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+    FinalCast
+  </h1>
+</Link>
 
-export default Navbar;
+        <div className="hidden md:flex space-x-6">
+            <Link
+              href="#features"
+              className="text-white font-semibold font-inter transition-all duration-300 hover:text-cyan-400 cursor-pointer"
+            >
+              Features
+            </Link>
+            <Link
+              href="#pricing"
+              className="text-white font-semibold transition-all duration-300 hover:text-cyan-400 cursor-pointer"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="#contact"
+              className="text-white font-semibold transition-all duration-300 hover:text-cyan-400 cursor-pointer"
+            >
+              Contact
+            </Link>
+              </div>
+
+
+
+               <div className="flex items-center gap-3 ml-10 md:ml-20 cursor-pointer">
+               <Button variant="glass">
+               Sign In
+               </Button>
+                 <Button variant="primary">
+                Get Started
+               </Button>
+            </div>
+
+          
+      </div>
+    </header>
+  )
+}
+
+export default Navbar

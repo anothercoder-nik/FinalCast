@@ -1,14 +1,12 @@
 import { Outlet } from '@tanstack/react-router';
-import Navbar from './components/Navbar';
+import Navbar from '../src/components/utils/Navbar.jsx';
 
 function RootLayout() {
   return (
-   <div className="min-h-screen flex flex-col bg-gray-100">
-    <Navbar/>
-      <div className="flex-grow py-8">
+
+     <div className="flex-grow">
         <Outlet />
       </div>
-    </div>
   );
 }
 
