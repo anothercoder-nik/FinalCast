@@ -14,7 +14,7 @@ const Hero = () => {
 
   return (
     
-<section className="min-h-screen flex items-center justify-center relative overflow-hidden">
+<section className="min-h-screen flex items-center justify-center relative overflow-hidden mt-20">
       <div className="text-center z-10 px-6">
         <div
           className={`transition-all duration-1000 ${textVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`}
@@ -24,7 +24,7 @@ const Hero = () => {
               Record.
             </span>
             <br />
-            <span className="text-white">Render. Release.</span>
+            <span className="text-white">Record. Release.</span>
           </h1>
 
           <p className="text-xl text-gray-400 mb-8 max-w-3xl mx-auto leading-relaxed">
@@ -54,7 +54,7 @@ const Hero = () => {
           onMouseLeave={() => setDemoHovered(false)}
           style={{ perspective: "1000px" }}
         >
-          <div className="backdrop-blur-lg bg-white/10 border border-white/20 rounded-3xl p-6 transform-gpu">
+          <div className="backdrop-blur-lg bg-white/5 border border-white/20 rounded-3xl p-6 transform-gpu">
             <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 min-h-96">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex space-x-2">
