@@ -14,7 +14,7 @@ import Marquee from 'react-fast-marquee';
 
 const Landing = () => {
   return (
-    <div className="min-h-[2000px] bg-slate-950 text-white overflow-x-hidden pt-36">
+    <div className="min-h-[2000px] bg-stone-950 text-white overflow-x-hidden pt-36">
       <FloatingShapes />
       <Navbar />
       <Hero />
@@ -89,7 +89,7 @@ const Landing = () => {
       Take it from here.
     </h2>
     <p className="text-xl md:text-3xl font-bold text-white mb-8">
-      Start creating with Riverside
+      Start creating with FinalCast
     </p>
     <button className="bg-purple-500 hover:bg-purple-600 px-8 py-4 rounded-xl font-semibold text-white">
       Start for Free

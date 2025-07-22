@@ -20,7 +20,7 @@ const Footer = () => {
         <div>
           <h4 className="font-semibold mb-4">Product</h4>
           <ul className="space-y-2">
-            <li><a href="#">Why Riverside</a></li>
+            <li><a href="#">FinalCast</a></li>
             <li><a href="#">Pricing</a></li>
             <li><a href="#">Mobile Apps</a></li>
           </ul>
