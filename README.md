@@ -49,7 +49,22 @@ While tools like Riverside.fm are powerful, they require creators or editors to 
 
 ## 📁 Folder Structure
 
-<pre><code>```bash FinalCast/ ├── frontend/ # React Frontend │ ├── src/ │ │ ├── hooks/ # useWebRTC, useMediaRecorder │ │ ├── components/ # Room, VideoTile, Toolbar │ │ ├── pages/ # JoinPage, RoomPage │ │ └── App.jsx ├── backend/ # Express + Socket.IO backend │ ├── index.js │ ├── routes/ │ └── controllers/ ├── scripts/ # FFmpeg rendering helpers ├── media/ # Transcoded files (temp) ├── public/ └── README.md ``` </code></pre>
+<pre><code>```FinalCast/
+├── frontend/               # React Frontend
+│   ├── src/
+│   │   ├── hooks/          # useWebRTC, useMediaRecorder
+│   │   ├── components/     # Room, VideoTile, Toolbar
+│   │   ├── pages/          # JoinPage, RoomPage
+│   │   └── App.jsx
+├── backend/                # Express + Socket.IO backend
+│   ├── index.js
+│   ├── routes/
+│   └── controllers/
+├── scripts/                # FFmpeg rendering helpers
+├── media/                  # Transcoded files (temp)
+├── public/
+└── README.md
+``` </code></pre>
 
 
 ---
