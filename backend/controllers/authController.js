@@ -36,7 +36,20 @@ export const delete_user = wrapAsync(async (req, res) => {
   res.status(200).json({ message: "User deleted successfully" });
 });
 
+
+
+export const get_current_user = wrapAsync(async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "User not authenticated" });
+  }
+  
+  res.status(200).json(req.user);
+});
+
 export const google_user = wrapAsync(async (req, res, next) => {
-  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    session: false 
+  })(req, res, next);
 });
 

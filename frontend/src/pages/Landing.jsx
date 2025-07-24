@@ -14,9 +14,8 @@ import Marquee from 'react-fast-marquee';
 
 const Landing = () => {
   return (
-    <div className="min-h-[2000px] bg-stone-950 text-white overflow-x-hidden pt-36">
-      <FloatingShapes />
-      <Navbar />
+    <div>
+       <FloatingShapes />
       <Hero />
       <InteractiveStats />
       <FeaturesSection />

@@ -3,6 +3,8 @@ import RootLayout from "../RootLayout.jsx"
 import { HomeRoute } from "./LandingPage.js"
 import { authRoute } from "./auth.route.js"
 import { dashboardRoute } from "./dashboard.js"
+import { contentRoute } from "./contentRoute.js"
+import { createStudioRoute } from "./createStudioRoute.js"
 
 export const rootRoute = createRootRoute({
     component: RootLayout
@@ -11,5 +13,7 @@ export const rootRoute = createRootRoute({
 export const routeTree = rootRoute.addChildren([
     HomeRoute, 
     authRoute, 
-    dashboardRoute
+    dashboardRoute,
+    contentRoute,
+    createStudioRoute
 ])

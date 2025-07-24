@@ -1,10 +1,13 @@
 import React from 'react'
+import { useSelector } from 'react-redux'
 import { ThemeToggle } from '../ui/theme-toggle'
 import { Link } from '@tanstack/react-router'
 import { Button } from '../ui/button'
-import { LayoutDashboard } from 'lucide-react'
+import UserAvatar from '../ui/UserAvatar'
 
 const Navbar = () => {
+  const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
+
   return (
     <header className='fixed top-6 left-1/2 transform -translate-x-1/2 z-50 text-nowrap'>
       <div className="backdrop-blur-md bg-white/10 border border-white/20 rounded-full px-8 py-3 flex items-center justify-between gap-8">
@@ -33,20 +36,27 @@ const Navbar = () => {
             >
               Contact
             </Link>
-              </div>
+        </div>
 
-
-
-               <div className="flex items-center gap-3 ml-10 md:ml-20 cursor-pointer">
-               <Button variant="glass">
-               Sign In
-               </Button>
-                 <Button variant="primary">
-                Get Started
-               </Button>
-            </div>
-
+        {isAuthenticated ? (
+          <div className="flex items-center gap-3 ml-10 md:ml-20">
+            <UserAvatar />
+          </div>
+        ) : (
           
+          <div className="flex items-center gap-3 ml-10 md:ml-20 cursor-pointer">
+            <Link href='/auth'>
+              <Button variant="glass">
+                Sign In
+              </Button>
+            </Link>
+            <Link href='/auth?mode=signup'>
+              <Button variant="primary">
+                Get Started
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   )

@@ -10,6 +10,7 @@ import authRoutes from "./routes/authRoutes.js";
 import connectDB from "./config/db.js";
 import "./config/passport.js";
 import { attachuser } from "./utils/attachUser.js";
+import studioRoutes from "./routes/studio.routes.js";
 
 const app = express();
 connectDB();
@@ -25,6 +26,7 @@ app.use(passport.initialize());
 
 const allowedOrigins = [
     "http://localhost:5173",
+    "http://localhost:3000"
 ];
 app.use(cors({
   origin: function (origin, callback) {
@@ -39,6 +41,8 @@ app.use(cors({
 }));
 
 app.use("/api/auth", authRoutes);
+app.use("/api/sessions", studioRoutes);
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
