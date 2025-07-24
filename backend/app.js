@@ -16,8 +16,16 @@ const app = express();
 connectDB();
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Add this middleware to handle empty bodies
+app.use((req, res, next) => {
+  if (req.method === 'POST' && !req.body && req.headers['content-length'] === '0') {
+    req.body = {};
+  }
+  next();
+});
 
 app.use(attachuser)
 app.use(passport.initialize());
@@ -34,6 +42,7 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      
       callback(new Error('Not allowed by CORS'));
     }
   },

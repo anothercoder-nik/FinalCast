@@ -17,7 +17,7 @@ const Navbar = () => {
   </h1>
 </Link>
 
-        <div className="hidden md:flex space-x-6">
+        <div className="hidden md:flex space-x-7">
             <Link
               href="#features"
               className="text-white font-semibold font-inter transition-all duration-300 hover:text-cyan-400 cursor-pointer"

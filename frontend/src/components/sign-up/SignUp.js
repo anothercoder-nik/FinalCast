@@ -42,8 +42,10 @@ const Card = styled(MuiCard)(({ theme }) => ({
 }));
 
 const SignUpContainer = styled(Stack)(({ theme }) => ({
-  height: 'calc((1 - var(--template-frame-height, 0)) * 100dvh)',
-  minHeight: '100%',
+  height: '100vh',
+  minHeight: '100vh',
+  maxHeight: '100vh',
+  overflow: 'hidden',
   padding: theme.spacing(2),
   [theme.breakpoints.up('sm')]: {
     padding: theme.spacing(4),
@@ -233,6 +235,7 @@ export default function SignUp(props) {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Button
               fullWidth
+              
               variant="outlined"
               onClick={handleGoogleSignup}
               startIcon={<GoogleIcon />}

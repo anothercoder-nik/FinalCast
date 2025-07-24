@@ -3,7 +3,7 @@
 import express from "express";
 import Session from "../models/session.model.js"; // Update path as necessary
 import { authenticateToken} from "../middleware/auth.js"; // Update path as necessary
-import { createSession, getAllSessions, joinSession, joinSessionByRoomId, leaveSession, updateSession } from "../controllers/sessionController.js";
+import { createSession, getAllSessions, joinSession, joinSessionByRoomId, leaveSession, updateSession, getSessionParticipants, updateParticipantRole, removeParticipant } from "../controllers/sessionController.js";
 
 const router = express.Router();
 
@@ -12,7 +12,6 @@ router.post("/", authenticateToken, createSession);
 
 // List Sessions for the Authenticated User (Host or Participant)
 router.get("/", authenticateToken, getAllSessions);
-
 // Join by roomId (more user-friendly)
 router.post("/room/:roomId/join", authenticateToken, joinSessionByRoomId);
 
@@ -24,5 +23,16 @@ router.post("/:id/leave", authenticateToken, leaveSession);
 
 // Update Session Status (Host Only)
 router.patch("/:id/status", authenticateToken, updateSession);
+
+// Get session participants (host or participants can view)
+router.get("/:id/participants", authenticateToken, getSessionParticipants);
+
+// Update participant role (host only)
+router.patch("/:id/participants/role", authenticateToken, updateParticipantRole);
+
+// Remove participant (host only)
+router.delete("/:id/participants/remove", authenticateToken, removeParticipant
+
+);
 
 export default router;

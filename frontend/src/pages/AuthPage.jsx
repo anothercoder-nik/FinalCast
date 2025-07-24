@@ -15,7 +15,7 @@ const AuthPage = () => {
 
   return (
     <>
-     <FloatingShapes />
+     <Navbar />
       {login ? <LoginForm state={setLogin} /> : <RegisterForm state={setLogin} />}
     </>
   )

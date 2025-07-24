@@ -15,7 +15,7 @@ import Marquee from 'react-fast-marquee';
 const Landing = () => {
   return (
     <div>
-       <FloatingShapes />
+      <Navbar/>
       <Hero />
       <InteractiveStats />
       <FeaturesSection />
