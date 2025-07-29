@@ -3,8 +3,29 @@ class MediaManager {
     this.localStream = null;
     this.screenStream = null;
 
-    // Primary constraints - high quality
-    this.constraints = {
+    // Detect mobile device
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    // Mobile-optimized constraints
+    this.mobileConstraints = {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000 // Lower sample rate for mobile
+      },
+      video: {
+        width: { min: 320, ideal: 640, max: 1280 },
+        height: { min: 240, ideal: 480, max: 720 },
+        frameRate: { min: 10, ideal: 15, max: 30 }, // Lower fps for mobile
+        facingMode: 'user',
+        aspectRatio: { ideal: 16/9 }
+      }
+    };
+
+    // Primary constraints - high quality for desktop
+    this.constraints = this.isMobile ? this.mobileConstraints : {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -23,7 +44,11 @@ class MediaManager {
     // Fallback constraints - basic quality
     this.fallbackConstraints = {
       audio: true,
-      video: {
+      video: this.isMobile ? {
+        width: { ideal: 320 },
+        height: { ideal: 240 },
+        frameRate: { ideal: 10 }
+      } : {
         width: { ideal: 640 },
         height: { ideal: 480 },
         frameRate: { ideal: 15 }
@@ -35,6 +60,8 @@ class MediaManager {
       audio: true,
       video: true
     };
+
+    console.log(`📱 Device detected: ${this.isMobile ? 'Mobile' : 'Desktop'} ${this.isIOS ? '(iOS)' : ''}`);
   }
 
   async requestMediaPermissions() {

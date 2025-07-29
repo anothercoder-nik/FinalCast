@@ -55,6 +55,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useWebRTC } from '../../hooks/useWebRTC';
 import VideoGrid from './VideoGrid';
 import MediaPermissionDialog from '../ui/MediaPermissionDialog';
+import WebRTCDebugPanel from '../debug/WebRTCDebugPanel';
 
 
 
@@ -684,6 +685,7 @@ export const StudioRoomComplete = () => {
     mediaError,
     connectionStates,
     audioLevel,
+    webRTCManagerRef,
     startLocalStream,
     toggleAudio,
     toggleVideo,
@@ -1406,6 +1408,16 @@ export const StudioRoomComplete = () => {
         onPermissionGranted={handlePermissionGranted}
         onPermissionDenied={handlePermissionDenied}
       />
+
+      {/* WebRTC Debug Panel - Development Only */}
+      {process.env.NODE_ENV === 'development' && (
+        <WebRTCDebugPanel
+          webRTCManager={webRTCManagerRef?.current}
+          localStream={localStream}
+          remoteStreams={remoteStreams}
+          connectionStates={connectionStates}
+        />
+      )}
     </div>
   );
 };

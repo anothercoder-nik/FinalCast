@@ -153,6 +153,45 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     
     try {
       webRTCManagerRef.current = new WebRTCManager(socket, {
+        onLocalStreamReady: (stream) => {
+          console.log('📥 Local stream ready from WebRTC Manager');
+          if (mountedRef.current) {
+            setLocalStream(stream);
+            
+            // Set up local video element
+            if (localVideoRef.current) {
+              localVideoRef.current.srcObject = stream;
+              console.log('📺 Set local video srcObject from callback');
+
+              localVideoRef.current.muted = true;
+              localVideoRef.current.autoplay = true;
+              localVideoRef.current.playsInline = true;
+
+              const playVideo = async () => {
+                try {
+                  await localVideoRef.current.play();
+                  console.log('✅ Local video playing from callback');
+                } catch (playError) {
+                  console.warn('⚠️ Local video play failed from callback:', playError);
+                }
+              };
+              playVideo();
+            }
+            
+            // Set track states
+            const videoTrack = stream.getVideoTracks()[0];
+            if (videoTrack) {
+              originalVideoTrack.current = videoTrack;
+            }
+            
+            setIsVideoEnabled(stream.getVideoTracks().length > 0);
+            setIsAudioEnabled(stream.getAudioTracks().length > 0);
+
+            if (stream.getAudioTracks().length > 0) {
+              startAudioLevelMonitoring(stream);
+            }
+          }
+        },
         onRemoteStream: (userId, stream) => {
           console.log('📥 Received remote stream from:', userId);
           if (mountedRef.current) {
@@ -213,7 +252,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         setIsInitializing(false);
       }
     }
-  }, [socket, currentUser, isInitializing]);
+  }, [socket, currentUser, isInitializing, startAudioLevelMonitoring]);
 
   // ✅ Fixed useEffect with proper dependencies
   useEffect(() => {
@@ -610,6 +649,9 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     connectionQuality,
     localVideoRef,
     audioLevel,
+    
+    // Internal refs for debugging
+    webRTCManagerRef,
     
     // Actions
     startLocalStream,

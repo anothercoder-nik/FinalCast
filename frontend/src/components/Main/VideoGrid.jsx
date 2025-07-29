@@ -132,10 +132,28 @@ const VideoGrid = ({
                 muted
                 playsInline
                 className="w-full h-full object-cover"
+                style={{
+                  backgroundColor: '#1a1a1a',
+                  // Mobile-specific optimizations
+                  WebkitTransform: 'translateZ(0)', // Enable hardware acceleration on iOS
+                  transform: 'translateZ(0)',
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden',
+                  // Touch handling improvements
+                  touchAction: 'manipulation',
+                  // Prevent iOS zoom on video tap
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none'
+                }}
                 onLoadedMetadata={() => {
                   console.log('📺 Local video loaded');
-                  // Force play
+                  // Set mobile-specific attributes
                   if (localVideoRef.current) {
+                    localVideoRef.current.setAttribute('webkit-playsinline', 'true');
+                    localVideoRef.current.setAttribute('x5-video-player-type', 'h5');
+                    localVideoRef.current.setAttribute('x5-video-player-fullscreen', 'true');
+                    localVideoRef.current.setAttribute('x5-video-orientation', 'portrait');
+                    // Force play
                     localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
                   }
                 }}
@@ -145,6 +163,14 @@ const VideoGrid = ({
                     localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
                   }
                 }}
+                onError={(e) => {
+                  console.error('❌ Local video error:', e);
+                }}
+                // Additional mobile-specific attributes
+                webkit-playsinline="true"
+                x5-video-player-type="h5"
+                x5-video-player-fullscreen="true"
+                x5-video-orientation="portrait"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -192,10 +218,29 @@ const VideoGrid = ({
                   playsInline
                   muted={false}
                   className="w-full h-full object-cover"
+                  style={{
+                    backgroundColor: '#1a1a1a',
+                    // Mobile-specific optimizations
+                    WebkitTransform: 'translateZ(0)', // Enable hardware acceleration on iOS
+                    transform: 'translateZ(0)',
+                    WebkitBackfaceVisibility: 'hidden',
+                    backfaceVisibility: 'hidden',
+                    // Touch handling improvements
+                    touchAction: 'manipulation',
+                    // Prevent iOS zoom on video tap
+                    WebkitUserSelect: 'none',
+                    userSelect: 'none'
+                  }}
                   ref={(videoElement) => {
                     if (videoElement) {
                       // Store the video element reference
                       remoteVideoRefs.current.set(userId, videoElement);
+                      
+                      // Mobile-specific video attributes
+                      videoElement.setAttribute('webkit-playsinline', 'true');
+                      videoElement.setAttribute('x5-video-player-type', 'h5');
+                      videoElement.setAttribute('x5-video-player-fullscreen', 'true');
+                      videoElement.setAttribute('x5-video-orientation', 'portrait');
                       
                       // Only set srcObject if it's different to prevent AbortError
                       if (videoElement.srcObject !== stream) {

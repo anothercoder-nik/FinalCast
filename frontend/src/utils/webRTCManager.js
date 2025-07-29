@@ -11,15 +11,47 @@ class WebRTCManager {
     this.reconnectionAttempts = new Map(); // userId -> attempt count
     this.localStream = null;
 
-    // ICE servers for NAT traversal
-    this.iceServers = [
+    // Detect mobile device
+    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // ICE servers for NAT traversal - optimized for mobile
+    this.iceServers = this.isMobile ? [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' }
+    ] : [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' }
     ];
 
+    console.log(`📱 WebRTC Manager initialized for ${this.isMobile ? 'mobile' : 'desktop'}`);
+
     this.setupSocketListeners();
     this.startConnectionMonitoring();
+    
+    // Immediately start local stream when manager is created
+    this.initializeLocalStream();
+  }
+
+  async initializeLocalStream() {
+    try {
+      console.log('🎥 Initializing local stream on WebRTC Manager creation...');
+      // Import mediaManager dynamically
+      const { mediaManager } = await import('./mediaManager.js');
+      this.localStream = await mediaManager.getLocalStream();
+      console.log('✅ Local stream initialized on manager creation:', {
+        audioTracks: this.localStream.getAudioTracks().length,
+        videoTracks: this.localStream.getVideoTracks().length
+      });
+      
+      // Notify callback that local stream is ready
+      if (this.callbacks.onLocalStreamReady) {
+        this.callbacks.onLocalStreamReady(this.localStream);
+      }
+    } catch (error) {
+      console.error('❌ Failed to initialize local stream on manager creation:', error);
+      // Continue without local stream for now
+    }
   }
 
   setupSocketListeners() {
@@ -42,6 +74,7 @@ class WebRTCManager {
   async startLocalStream() {
     try {
       console.log('📹 WebRTC Manager requesting local stream...');
+      const { mediaManager } = await import('./mediaManager.js');
       this.localStream = await mediaManager.getLocalStream();
       
       // Add tracks to existing peer connections
@@ -63,6 +96,11 @@ class WebRTCManager {
       
       // Notify all existing peer connections about the new stream
       this.notifyPeerConnectionsOfNewStream();
+
+      // Notify callback that local stream is ready/updated
+      if (this.callbacks.onLocalStreamReady) {
+        this.callbacks.onLocalStreamReady(this.localStream);
+      }
 
       return this.localStream;
     } catch (error) {
@@ -164,13 +202,26 @@ class WebRTCManager {
 
       // Ensure we have a local stream before creating peer connection
       if (!this.localStream) {
-        console.warn(`⚠️ No local stream available when connecting to ${userId}, getting one...`);
-        // Try to get local stream
-        try {
-          this.localStream = await mediaManager.getLocalStream();
-          console.log('✅ Got local stream for peer connection');
-        } catch (streamError) {
-          console.error('❌ Failed to get local stream:', streamError);
+        console.warn(`⚠️ No local stream available when connecting to ${userId}, waiting for initialization...`);
+        // Wait for up to 5 seconds for local stream to be ready
+        const maxWaitTime = 5000;
+        const checkInterval = 100;
+        let waitTime = 0;
+        
+        while (!this.localStream && waitTime < maxWaitTime) {
+          await new Promise(resolve => setTimeout(resolve, checkInterval));
+          waitTime += checkInterval;
+        }
+        
+        // If still no local stream, try to get one
+        if (!this.localStream) {
+          try {
+            const { mediaManager } = await import('./mediaManager.js');
+            this.localStream = await mediaManager.getLocalStream();
+            console.log('✅ Got local stream for peer connection');
+          } catch (streamError) {
+            console.error('❌ Failed to get local stream:', streamError);
+          }
         }
       }
 
@@ -214,15 +265,57 @@ class WebRTCManager {
   }
 
   async createPeerConnection(userId, isInitiator = false) {
-    console.log(`🔗 Creating peer connection with ${userId}`);
+    console.log(`🔗 Creating peer connection with ${userId} (${this.isMobile ? 'mobile' : 'desktop'})`);
 
-    const peerConnection = new RTCPeerConnection({
+    // Mobile-optimized RTCPeerConnection configuration
+    const rtcConfig = {
       iceServers: this.iceServers,
-      iceCandidatePoolSize: 10
-    });
+      iceCandidatePoolSize: this.isMobile ? 1 : 10, // Reduce ICE candidate pool for mobile
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      // Mobile-specific optimizations
+      ...(this.isMobile && {
+        sdpSemantics: 'unified-plan'
+      })
+    };
+
+    const peerConnection = new RTCPeerConnection(rtcConfig);
 
     // Store the connection
     this.peerConnections.set(userId, peerConnection);
+
+    // Initialize connection stats
+    this.connectionStats.set(userId, {
+      connectionState: 'new',
+      iceState: 'new',
+      connectionTime: Date.now(),
+      lastCheck: Date.now(),
+      reconnects: 0,
+      isMobile: this.isMobile
+    });
+
+    // Enhanced connection state monitoring for mobile
+    peerConnection.addEventListener('connectionstatechange', () => {
+      const state = peerConnection.connectionState;
+      console.log(`🔄 Connection state change for ${userId}: ${state} (${this.isMobile ? 'mobile' : 'desktop'})`);
+      
+      const stats = this.connectionStats.get(userId);
+      if (stats) {
+        stats.connectionState = state;
+        stats.lastCheck = Date.now();
+        
+        if (state === 'connected') {
+          stats.reconnects = 0;
+          this.reconnectionAttempts.delete(userId);
+        } else if (state === 'failed' || state === 'disconnected') {
+          this.handleConnectionFailure(userId, state);
+        }
+      }
+
+      if (this.callbacks.onConnectionStateChange) {
+        this.callbacks.onConnectionStateChange(userId, state);
+      }
+    });
 
     // Add local stream tracks
     if (this.localStream && this.localStream.getTracks().length > 0) {
@@ -354,6 +447,25 @@ class WebRTCManager {
       if (!userId) {
         console.error(`❌ Cannot find userId for socket ${senderSocketId}`);
         return;
+      }
+
+      // Ensure we have a local stream before creating peer connection
+      if (!this.localStream) {
+        console.warn(`⚠️ No local stream available when handling offer from ${userId}, getting one...`);
+        try {
+          // Import mediaManager dynamically or ensure it's available
+          const { mediaManager } = await import('./mediaManager.js');
+          this.localStream = await mediaManager.getLocalStream();
+          console.log('✅ Got local stream for peer connection in handleOffer');
+          
+          // Notify callback that local stream is ready
+          if (this.callbacks.onLocalStreamReady) {
+            this.callbacks.onLocalStreamReady(this.localStream);
+          }
+        } catch (streamError) {
+          console.error('❌ Failed to get local stream in handleOffer:', streamError);
+          // Continue anyway, the connection might work for receiving only
+        }
       }
 
       console.log(`📋 Creating answer for ${userId} with local stream:`, {
