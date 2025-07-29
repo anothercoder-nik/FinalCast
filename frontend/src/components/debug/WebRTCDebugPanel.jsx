@@ -34,6 +34,15 @@ const WebRTCDebugPanel = ({ webRTCManager, localStream, remoteStreams, connectio
           userId,
           state,
           hasPeerConnection: webRTCManager.peerConnections.has(userId)
+        })),
+        webrtcStates: Array.from(webRTCManager.peerConnections.entries()).map(([userId, pc]) => ({
+          userId,
+          connectionState: pc.connectionState,
+          iceConnectionState: pc.iceConnectionState,
+          iceGatheringState: pc.iceGatheringState,
+          signalingState: pc.signalingState,
+          hasLocalDescription: !!pc.localDescription,
+          hasRemoteDescription: !!pc.remoteDescription
         }))
       };
 
@@ -72,10 +81,49 @@ const WebRTCDebugPanel = ({ webRTCManager, localStream, remoteStreams, connectio
         console.log(`Peer ${userId}:`, {
           connectionState: pc.connectionState,
           iceConnectionState: pc.iceConnectionState,
+          iceGatheringState: pc.iceGatheringState,
           signalingState: pc.signalingState,
           senders: pc.getSenders().length,
-          receivers: pc.getReceivers().length
+          receivers: pc.getReceivers().length,
+          localDescription: !!pc.localDescription,
+          remoteDescription: !!pc.remoteDescription
         });
+        
+        // Check senders and receivers
+        console.log(`Senders for ${userId}:`, pc.getSenders().map(s => ({
+          kind: s.track?.kind,
+          enabled: s.track?.enabled,
+          readyState: s.track?.readyState
+        })));
+        
+        console.log(`Receivers for ${userId}:`, pc.getReceivers().map(r => ({
+          kind: r.track?.kind,
+          enabled: r.track?.enabled,
+          readyState: r.track?.readyState
+        })));
+      });
+    }
+  };
+
+  const forcePlay = () => {
+    if (webRTCManager) {
+      console.log('🎬 Forcing video/audio play...');
+      // Find all video and audio elements and try to play them
+      const videos = document.querySelectorAll('video');
+      const audios = document.querySelectorAll('audio');
+      
+      videos.forEach((video, index) => {
+        if (video.srcObject) {
+          console.log(`Playing video ${index}:`, video.srcObject);
+          video.play().catch(e => console.error('Video play failed:', e));
+        }
+      });
+      
+      audios.forEach((audio, index) => {
+        if (audio.srcObject) {
+          console.log(`Playing audio ${index}:`, audio.srcObject);
+          audio.play().catch(e => console.error('Audio play failed:', e));
+        }
       });
     }
   };
@@ -134,12 +182,29 @@ const WebRTCDebugPanel = ({ webRTCManager, localStream, remoteStreams, connectio
           debugInfo.connections.map((conn, index) => (
             <div key={index} className="ml-2 mb-1">
               <div>User: {conn.userId}</div>
-              <div>State: <span className={conn.state === 'connected' ? 'text-green-400' : 'text-yellow-400'}>{conn.state}</span></div>
+              <div>State: <span className={conn.state === 'connected' ? 'text-green-400' : conn.state === 'connecting' ? 'text-yellow-400' : 'text-red-400'}>{conn.state}</span></div>
               <div>Peer Conn: {conn.hasPeerConnection ? '✅' : '❌'}</div>
             </div>
           ))
         ) : (
           <div className="ml-2">No connections</div>
+        )}
+      </div>
+
+      <div className="mb-4">
+        <h4 className="font-semibold text-orange-400">WebRTC States</h4>
+        {debugInfo.webrtcStates?.length > 0 ? (
+          debugInfo.webrtcStates.map((state, index) => (
+            <div key={index} className="ml-2 mb-2 text-xs">
+              <div className="font-semibold">{state.userId}</div>
+              <div>Connection: <span className={state.connectionState === 'connected' ? 'text-green-400' : 'text-yellow-400'}>{state.connectionState}</span></div>
+              <div>ICE: <span className={state.iceConnectionState === 'connected' || state.iceConnectionState === 'completed' ? 'text-green-400' : 'text-yellow-400'}>{state.iceConnectionState}</span></div>
+              <div>Signaling: <span className={state.signalingState === 'stable' ? 'text-green-400' : 'text-yellow-400'}>{state.signalingState}</span></div>
+              <div>ICE Gathering: {state.iceGatheringState}</div>
+            </div>
+          ))
+        ) : (
+          <div className="ml-2">No WebRTC states</div>
         )}
       </div>
 
@@ -155,6 +220,12 @@ const WebRTCDebugPanel = ({ webRTCManager, localStream, remoteStreams, connectio
           className="bg-green-600 hover:bg-green-700 px-2 py-1 rounded text-xs"
         >
           Test Peers
+        </button>
+        <button 
+          onClick={forcePlay}
+          className="bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded text-xs"
+        >
+          Force Play
         </button>
       </div>
     </div>

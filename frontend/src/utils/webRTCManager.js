@@ -413,13 +413,24 @@ class WebRTCManager {
     // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log('🧊 Generating ICE candidate for', userId, {
+          candidate: event.candidate.candidate,
+          sdpMLineIndex: event.candidate.sdpMLineIndex,
+          sdpMid: event.candidate.sdpMid
+        });
+        
         const targetSocketId = this.getSocketIdByUserId(userId);
         if (targetSocketId) {
           this.socket.emit('webrtc-ice-candidate', {
             targetSocketId: targetSocketId,
             candidate: event.candidate
           });
+          console.log('📤 ICE candidate sent to', userId);
+        } else {
+          console.error('❌ No target socket ID found for', userId);
         }
+      } else {
+        console.log('🧊 ICE candidate gathering complete for', userId);
       }
     };
 
@@ -468,17 +479,43 @@ class WebRTCManager {
       const iceState = peerConnection.iceConnectionState;
       console.log(`🧊 ICE connection state for ${userId}:`, iceState);
 
+      // Update connection stats
+      const stats = this.connectionStats.get(userId);
+      if (stats) {
+        stats.iceState = iceState;
+        stats.lastCheck = Date.now();
+      }
+
       switch (iceState) {
+        case 'checking':
+          console.log(`🔍 ICE checking for ${userId}...`);
+          break;
+        case 'connected':
+          console.log(`✅ ICE connection established for ${userId}`);
+          break;
+        case 'completed':
+          console.log(`✅ ICE connection completed for ${userId}`);
+          break;
         case 'failed':
           console.log(`❌ ICE connection failed for ${userId}, restarting ICE...`);
-          peerConnection.restartIce();
+          try {
+            peerConnection.restartIce();
+          } catch (error) {
+            console.error('❌ Failed to restart ICE:', error);
+          }
           break;
         case 'disconnected':
           console.log(`⚠️ ICE disconnected for ${userId}`);
+          // Don't immediately fail, ICE can recover
+          setTimeout(() => {
+            if (peerConnection.iceConnectionState === 'disconnected') {
+              console.log(`🔄 ICE still disconnected for ${userId}, attempting reconnection...`);
+              this.handleConnectionFailure(userId, 'ice-disconnected');
+            }
+          }, 10000); // Wait 10 seconds before considering it failed
           break;
-        case 'connected':
-        case 'completed':
-          console.log(`✅ ICE connection established for ${userId}`);
+        case 'closed':
+          console.log(`🔒 ICE connection closed for ${userId}`);
           break;
       }
     };
@@ -603,6 +640,37 @@ class WebRTCManager {
     } catch (error) {
       console.error(`❌ Failed to add ICE candidate:`, error);
     }
+  }
+
+  // Handle connection failures and attempt recovery
+  handleConnectionFailure(userId, reason) {
+    console.log(`🔧 Handling connection failure for ${userId}, reason: ${reason}`);
+    
+    const attempts = this.reconnectionAttempts.get(userId) || 0;
+    const maxAttempts = 3;
+    
+    if (attempts >= maxAttempts) {
+      console.log(`❌ Max reconnection attempts reached for ${userId}, giving up`);
+      this.closePeerConnection(userId);
+      return;
+    }
+    
+    this.reconnectionAttempts.set(userId, attempts + 1);
+    console.log(`🔄 Attempting reconnection ${attempts + 1}/${maxAttempts} for ${userId}`);
+    
+    // Close existing connection
+    const existingConnection = this.peerConnections.get(userId);
+    if (existingConnection) {
+      existingConnection.close();
+      this.peerConnections.delete(userId);
+    }
+    
+    // Wait a bit before reconnecting
+    const delay = Math.min(2000 * Math.pow(2, attempts), 10000); // Exponential backoff, max 10s
+    setTimeout(() => {
+      console.log(`🔄 Reconnecting to ${userId} after ${delay}ms...`);
+      this.connectToUser(userId);
+    }, delay);
   }
 
   // Process Queued ICE Candidates
