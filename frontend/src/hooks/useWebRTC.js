@@ -158,21 +158,32 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
           if (mountedRef.current) {
             setLocalStream(stream);
             
-            // Set up local video element
+            // Set up local video element immediately
             if (localVideoRef.current) {
+              console.log('📺 Setting up local video element with stream');
               localVideoRef.current.srcObject = stream;
-              console.log('📺 Set local video srcObject from callback');
-
               localVideoRef.current.muted = true;
               localVideoRef.current.autoplay = true;
               localVideoRef.current.playsInline = true;
 
+              // Force play immediately
               const playVideo = async () => {
                 try {
                   await localVideoRef.current.play();
                   console.log('✅ Local video playing from callback');
                 } catch (playError) {
-                  console.warn('⚠️ Local video play failed from callback:', playError);
+                  console.warn('⚠️ Local video play failed from callback, retrying...', playError);
+                  // Retry after a short delay
+                  setTimeout(async () => {
+                    try {
+                      if (localVideoRef.current && mountedRef.current) {
+                        await localVideoRef.current.play();
+                        console.log('✅ Local video playing (retry from callback)');
+                      }
+                    } catch (retryError) {
+                      console.error('❌ Local video retry failed from callback:', retryError);
+                    }
+                  }, 500);
                 }
               };
               playVideo();
@@ -240,6 +251,29 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       if (mountedRef.current) {
         setIsInitialized(true);
         console.log('✅ WebRTC initialized successfully');
+        
+        // Ensure local video is set up if stream is already available
+        if (webRTCManagerRef.current?.localStream && localVideoRef.current) {
+          console.log('🔄 Setting up local video after initialization');
+          const stream = webRTCManagerRef.current.localStream;
+          setLocalStream(stream);
+          
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true;
+          localVideoRef.current.autoplay = true;
+          localVideoRef.current.playsInline = true;
+          
+          // Force play
+          localVideoRef.current.play().then(() => {
+            console.log('✅ Local video playing after manual setup');
+          }).catch(error => {
+            console.warn('⚠️ Local video play failed after manual setup:', error);
+          });
+          
+          // Set track states
+          setIsVideoEnabled(stream.getVideoTracks().length > 0);
+          setIsAudioEnabled(stream.getAudioTracks().length > 0);
+        }
       }
       
     } catch (error) {
@@ -435,12 +469,16 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         console.log('🚀 WebRTC not initialized, initializing now...');
         await initializeWebRTC();
 
+        // Wait a bit for initialization to complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         // Double check after initialization
         if (!webRTCManagerRef.current) {
           throw new Error('Failed to initialize WebRTC');
         }
       }
       
+      console.log('📹 Getting stream from WebRTC manager...');
       const stream = await webRTCManagerRef.current.startLocalStream();
       
       if (!mountedRef.current) return stream;
@@ -448,33 +486,38 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       setLocalStream(stream);
 
       if (localVideoRef.current) {
+        console.log('📺 Setting up local video element');
         localVideoRef.current.srcObject = stream;
-        console.log('📺 Set local video srcObject');
-
         localVideoRef.current.muted = true;
         localVideoRef.current.autoplay = true;
         localVideoRef.current.playsInline = true;
 
-        const playVideo = async () => {
+        // Enhanced play with multiple retries and increasing delays
+        const playVideo = async (retries = 3) => {
           try {
             await localVideoRef.current.play();
-            console.log('✅ Local video playing');
+            console.log(`✅ Local video playing successfully`);
           } catch (playError) {
-            console.warn('⚠️ Local video play failed, retrying...', playError);
-            setTimeout(async () => {
-              try {
+            console.warn(`⚠️ Local video play failed (attempt ${4-retries}):`, playError.message);
+            if (retries > 0) {
+              const delay = 200 * (4-retries); // Increasing delay: 200ms, 400ms, 600ms
+              setTimeout(() => {
                 if (localVideoRef.current && mountedRef.current) {
-                  await localVideoRef.current.play();
-                  console.log('✅ Local video playing (retry successful)');
+                  playVideo(retries - 1);
                 }
-              } catch (retryError) {
-                console.error('❌ Local video play failed after retry:', retryError);
-              }
-            }, 100);
+              }, delay);
+            } else {
+              console.error('❌ Local video play failed after all retries');
+            }
           }
         };
 
-        playVideo();
+        // Start playing with a small initial delay
+        setTimeout(() => {
+          if (localVideoRef.current && mountedRef.current) {
+            playVideo();
+          }
+        }, 100);
       }
       
       const videoTrack = stream.getVideoTracks()[0];
