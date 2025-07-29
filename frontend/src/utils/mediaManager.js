@@ -8,13 +8,15 @@ class MediaManager {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        autoGainControl: true,
+        sampleRate: 44100
       },
       video: {
-        width: { ideal: 1280, max: 1920 },
-        height: { ideal: 720, max: 1080 },
-        frameRate: { ideal: 30, max: 60 },
-        facingMode: 'user'
+        width: { min: 640, ideal: 1280, max: 1920 },
+        height: { min: 480, ideal: 720, max: 1080 },
+        frameRate: { min: 15, ideal: 30, max: 60 },
+        facingMode: 'user',
+        aspectRatio: { ideal: 16/9 }
       }
     };
 

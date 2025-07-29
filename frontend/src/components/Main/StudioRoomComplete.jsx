@@ -674,7 +674,8 @@ export const StudioRoomComplete = () => {
     stopScreenShare,
     connectToUser,
     cleanupWebRTC,
-    getDebugInfo
+    getDebugInfo,
+    initializeWebRTC
   } = useWebRTC(roomId, isJoined, currentUser);
 
   // Expose debug function to window for testing
@@ -1116,9 +1117,15 @@ export const StudioRoomComplete = () => {
       } else if (permissionAction === 'join') {
         console.log('🚀 Joining session with permissions...');
 
-        // Ensure WebRTC is initialized and get media stream
-        if (isInitialized && !localStream) {
-          console.log('🎥 Starting local media stream...');
+        // Initialize WebRTC first if not already done
+        if (!isInitialized && !isInitializing) {
+          console.log('🎥 Initializing WebRTC for guest...');
+          await initializeWebRTC();
+        }
+
+        // Ensure we have local media stream
+        if (!localStream) {
+          console.log('🎥 Starting local media stream for guest...');
           await startLocalStream();
         }
 

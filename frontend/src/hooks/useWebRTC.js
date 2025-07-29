@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSocket } from '../context/SocketContext';
 import WebRTCManager from '../utils/webRTCManager';
@@ -25,10 +26,192 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const mountedRef = useRef(true); // ✅ Added mount check
 
-  // Initialize WebRTC when conditions are met
+  // ✅ Cleanup on unmount
   useEffect(() => {
-    if (isConnected && socket && currentUser && !isInitialized) {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // ✅ Audio level monitoring functions - moved to useCallback with proper dependencies
+  const stopAudioLevelMonitoring = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    analyserRef.current = null;
+    if (mountedRef.current) {
+      setAudioLevel(0);
+    }
+    console.log('🎤 Audio level monitoring stopped');
+  }, []);
+
+  const startAudioLevelMonitoring = useCallback((stream) => {
+    if (!stream || !stream.getAudioTracks().length || !mountedRef.current) return;
+
+    try {
+      stopAudioLevelMonitoring();
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) {
+        console.warn('AudioContext not supported');
+        return;
+      }
+      
+      audioContextRef.current = new AudioContext();
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      analyserRef.current.smoothingTimeConstant = 0.8;
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      source.connect(analyserRef.current);
+
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+      const updateAudioLevel = () => {
+        if (!analyserRef.current || !mountedRef.current) return;
+
+        analyserRef.current.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        const normalizedLevel = Math.min(100, Math.round((average / 255) * 100));
+        
+        if (mountedRef.current) {
+          setAudioLevel(normalizedLevel);
+        }
+
+        animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
+      };
+
+      updateAudioLevel();
+      console.log('🎤 Audio level monitoring started');
+    } catch (error) {
+      console.warn('Audio level monitoring failed:', error);
+    }
+  }, [stopAudioLevelMonitoring]);
+
+  // ✅ Screen share helper - moved to useCallback
+  const handleStopScreenShare = useCallback(async () => {
+    if (!mountedRef.current) return;
+
+    try {
+      console.log('🖥️ Stopping screen share...');
+
+      if (webRTCManagerRef.current) {
+        const cameraStream = await webRTCManagerRef.current.stopScreenShare();
+
+        if (!mountedRef.current) return;
+
+        setLocalStream(cameraStream);
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = cameraStream;
+          console.log('📺 Restored camera video in local element');
+
+          try {
+            await localVideoRef.current.play();
+            console.log('✅ Camera video playing after screen share stop');
+          } catch (playError) {
+            console.warn('⚠️ Camera video play failed:', playError);
+          }
+        }
+      }
+
+      setIsScreenSharing(false);
+      toast.info('Screen sharing stopped');
+
+    } catch (error) {
+      console.error('❌ Failed to stop screen share:', error);
+      if (mountedRef.current) {
+        toast.error('Failed to stop screen share');
+      }
+    }
+  }, []);
+
+  // ✅ Fixed initializeWebRTC with proper dependencies
+  const initializeWebRTC = useCallback(async () => {
+    if (!socket || !currentUser || !mountedRef.current) {
+      console.warn('Cannot initialize WebRTC: missing requirements');
+      return;
+    }
+
+    try {
+      if (mountedRef.current) setIsInitializing(true);
+      console.log('🚀 Initializing WebRTC...');
+      
+      webRTCManagerRef.current = new WebRTCManager(socket, {
+        onRemoteStream: (userId, stream) => {
+          console.log('📥 Received remote stream from:', userId);
+          if (mountedRef.current) {
+            setRemoteStreams(prev => new Map(prev.set(userId, stream)));
+          }
+        },
+        onConnectionStateChange: (userId, state) => {
+          console.log(`🔗 Connection state changed for ${userId}:`, state);
+          if (mountedRef.current) {
+            setConnectionStates(prev => new Map(prev.set(userId, state)));
+          }
+        },
+        onConnectionQuality: (userId, quality) => {
+          if (mountedRef.current) {
+            setConnectionQuality(prev => new Map(prev.set(userId, quality)));
+          }
+        },
+        onConnectionIssue: (userId, issue) => {
+          console.warn(`⚠️ Connection issue for ${userId}:`, issue);
+          if (mountedRef.current) {
+            toast.warning(`Connection issue with ${userId}: ${issue.quality} quality`);
+          }
+        },
+        onPeerDisconnected: (userId) => {
+          console.log('❌ Peer disconnected:', userId);
+          if (mountedRef.current) {
+            setRemoteStreams(prev => {
+              const newStreams = new Map(prev);
+              newStreams.delete(userId);
+              return newStreams;
+            });
+            setConnectionStates(prev => {
+              const newStates = new Map(prev);
+              newStates.delete(userId);
+              return newStates;
+            });
+            setConnectionQuality(prev => {
+              const newQuality = new Map(prev);
+              newQuality.delete(userId);
+              return newQuality;
+            });
+          }
+        }
+      });
+      
+      if (mountedRef.current) {
+        setIsInitialized(true);
+        console.log('✅ WebRTC initialized successfully');
+      }
+      
+    } catch (error) {
+      console.error('❌ WebRTC initialization failed:', error);
+      if (mountedRef.current) {
+        setMediaError(error);
+      }
+    } finally {
+      if (mountedRef.current) {
+        setIsInitializing(false);
+      }
+    }
+  }, [socket, currentUser]);
+
+  // ✅ Fixed useEffect with proper dependencies
+  useEffect(() => {
+    if (isConnected && socket && currentUser && !isInitialized && !isInitializing) {
       initializeWebRTC();
     }
     
@@ -44,55 +227,53 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         animationFrameRef.current = null;
       }
 
-      if (audioContextRef.current) {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
 
       analyserRef.current = null;
     };
-  }, [isConnected, socket, currentUser]);
+  }, [isConnected, socket, currentUser, isInitialized, isInitializing, initializeWebRTC]);
 
-  // Handle socket events for peer connections
+  // ✅ Fixed socket event handlers with proper checks
   useEffect(() => {
-    if (!socket || !webRTCManagerRef.current) return;
+    if (!socket || !webRTCManagerRef.current || !currentUser) return;
 
     const handleCurrentParticipants = async (participants) => {
+      if (!participants || !Array.isArray(participants) || !mountedRef.current) return;
+      
       console.log('🤝 Setting up WebRTC with existing participants:', participants.length);
 
-      // Ensure WebRTC manager is initialized
-      if (!webRTCManagerRef.current) {
-        console.warn('⚠️ WebRTC manager not initialized, skipping connections');
-        return;
-      }
-
       for (const participant of participants) {
-        if (participant.userId !== currentUser._id) {
-          console.log(`🔗 Connecting to existing participant: ${participant.userName} (${participant.userId})`);
-          // Update socket mapping and connect
-          webRTCManagerRef.current.updateUserSocketMapping(participant.userId, participant.socketId);
-          await webRTCManagerRef.current.connectToUser(participant.userId, participant.socketId);
+        if (participant?.userId && participant.userId !== currentUser._id) {
+          try {
+            webRTCManagerRef.current.updateUserSocketMapping(participant.userId, participant.socketId);
+            await webRTCManagerRef.current.connectToUser(participant.userId, participant.socketId);
+          } catch (error) {
+            console.error('Error connecting to participant:', error);
+          }
         }
       }
     };
 
     const handleUserJoined = async (userData) => {
+      if (!userData || !mountedRef.current) return;
+      
       if (userData.userId !== currentUser._id && userData.shouldConnect) {
         console.log('🤝 New user joined, establishing WebRTC connection:', userData.userId);
-
-        // Ensure WebRTC manager is initialized
-        if (!webRTCManagerRef.current) {
-          console.warn('⚠️ WebRTC manager not initialized, skipping connection');
-          return;
+        try {
+          webRTCManagerRef.current.updateUserSocketMapping(userData.userId, userData.socketId);
+          await webRTCManagerRef.current.connectToUser(userData.userId, userData.socketId);
+        } catch (error) {
+          console.error('Error connecting to new user:', error);
         }
-
-        // Update socket mapping and connect
-        webRTCManagerRef.current.updateUserSocketMapping(userData.userId, userData.socketId);
-        await webRTCManagerRef.current.connectToUser(userData.userId, userData.socketId);
       }
     };
 
     const handleUserLeft = (userData) => {
+      if (!userData || !mountedRef.current) return;
+      
       console.log('👋 User left, cleaning up WebRTC:', userData.userId);
       setRemoteStreams(prev => {
         const newStreams = new Map(prev);
@@ -117,151 +298,26 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     };
   }, [socket, currentUser, isInitialized]);
 
-  // Audio level monitoring functions - define early to avoid circular dependencies
-  const stopAudioLevelMonitoring = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    analyserRef.current = null;
-    setAudioLevel(0);
-    console.log('🎤 Audio level monitoring stopped');
-  }, []);
-
-  const startAudioLevelMonitoring = useCallback((stream) => {
-    if (!stream || !stream.getAudioTracks().length) return;
-
-    try {
-      // Stop previous monitoring
-      stopAudioLevelMonitoring();
-
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) {
-        console.warn('AudioContext not supported');
-        return;
-      }
-      audioContextRef.current = new AudioContext();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      analyserRef.current.smoothingTimeConstant = 0.8;
-
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      source.connect(analyserRef.current);
-
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-
-      const updateAudioLevel = () => {
-        if (!analyserRef.current) return;
-
-        analyserRef.current.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-        const normalizedLevel = Math.min(100, Math.round((average / 255) * 100));
-        setAudioLevel(normalizedLevel);
-
-        animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
-      };
-
-      updateAudioLevel();
-      console.log('🎤 Audio level monitoring started');
-    } catch (error) {
-      console.warn('Audio level monitoring failed:', error);
-    }
-  }, [stopAudioLevelMonitoring]);
-
-  // Screen share helper function - define early to avoid circular dependencies
-  const handleStopScreenShare = useCallback(async () => {
-    try {
-      console.log('🖥️ Stopping screen share...');
-
-      if (webRTCManagerRef.current) {
-        const cameraStream = await webRTCManagerRef.current.stopScreenShare();
-
-        // Update local stream with camera stream
-        setLocalStream(cameraStream);
-
-        // Force update the video element
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = cameraStream;
-          console.log('📺 Restored camera video in local element');
-
-          // Ensure video plays
-          try {
-            await localVideoRef.current.play();
-            console.log('✅ Camera video playing after screen share stop');
-          } catch (playError) {
-            console.warn('⚠️ Camera video play failed:', playError);
-          }
-        }
-      }
-
-      setIsScreenSharing(false);
-      toast.info('Screen sharing stopped');
-
-    } catch (error) {
-      console.error('❌ Failed to stop screen share:', error);
-      toast.error('Failed to stop screen share');
-    }
-  }, []);
-
-  const initializeWebRTC = async () => {
-    try {
-      setIsInitializing(true);
-      console.log('🚀 Initializing WebRTC...');
+  // ✅ Update local video when stream changes
+  useEffect(() => {
+    if (localStream && localVideoRef.current && mountedRef.current) {
+      console.log('🎥 Local stream changed, updating video element');
+      localVideoRef.current.srcObject = localStream;
       
-      webRTCManagerRef.current = new WebRTCManager(socket, {
-        onRemoteStream: (userId, stream) => {
-          console.log('📥 Received remote stream from:', userId);
-          setRemoteStreams(prev => new Map(prev.set(userId, stream)));
-        },
-        onConnectionStateChange: (userId, state) => {
-          console.log(`🔗 Connection state changed for ${userId}:`, state);
-          setConnectionStates(prev => new Map(prev.set(userId, state)));
-        },
-        onConnectionQuality: (userId, quality) => {
-          setConnectionQuality(prev => new Map(prev.set(userId, quality)));
-        },
-        onConnectionIssue: (userId, issue) => {
-          console.warn(`⚠️ Connection issue for ${userId}:`, issue);
-          toast.warning(`Connection issue with ${userId}: ${issue.quality} quality`);
-        },
-        onPeerDisconnected: (userId) => {
-          console.log('❌ Peer disconnected:', userId);
-          setRemoteStreams(prev => {
-            const newStreams = new Map(prev);
-            newStreams.delete(userId);
-            return newStreams;
-          });
-          setConnectionStates(prev => {
-            const newStates = new Map(prev);
-            newStates.delete(userId);
-            return newStates;
-          });
-          setConnectionQuality(prev => {
-            const newQuality = new Map(prev);
-            newQuality.delete(userId);
-            return newQuality;
-          });
-        }
+      localVideoRef.current.muted = true;
+      localVideoRef.current.autoplay = true;
+      localVideoRef.current.playsInline = true;
+
+      localVideoRef.current.play().catch(error => {
+        console.warn('⚠️ Failed to play local video:', error);
       });
-      
-      setIsInitialized(true);
-      console.log('✅ WebRTC initialized successfully');
-      
-    } catch (error) {
-      console.error('❌ WebRTC initialization failed:', error);
-      setMediaError(error);
-    } finally {
-      setIsInitializing(false);
     }
-  };
+  }, [localStream]);
 
+  // ✅ Fixed startLocalStream with proper error handling
   const startLocalStream = useCallback(async () => {
+    if (!mountedRef.current) return;
+
     try {
       console.log('📹 Starting local stream...');
       setMediaError(null);
@@ -271,33 +327,49 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       }
       
       const stream = await webRTCManagerRef.current.startLocalStream();
+      
+      if (!mountedRef.current) return stream;
+      
       setLocalStream(stream);
 
-      // Set local video element and ensure it plays
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         console.log('📺 Set local video srcObject');
 
-        // Force video to play
-        try {
-          await localVideoRef.current.play();
-          console.log('✅ Local video playing');
-        } catch (playError) {
-          console.warn('⚠️ Local video play failed:', playError);
-        }
+        localVideoRef.current.muted = true;
+        localVideoRef.current.autoplay = true;
+        localVideoRef.current.playsInline = true;
+
+        const playVideo = async () => {
+          try {
+            await localVideoRef.current.play();
+            console.log('✅ Local video playing');
+          } catch (playError) {
+            console.warn('⚠️ Local video play failed, retrying...', playError);
+            setTimeout(async () => {
+              try {
+                if (localVideoRef.current && mountedRef.current) {
+                  await localVideoRef.current.play();
+                  console.log('✅ Local video playing (retry successful)');
+                }
+              } catch (retryError) {
+                console.error('❌ Local video play failed after retry:', retryError);
+              }
+            }, 100);
+          }
+        };
+
+        playVideo();
       }
       
-      // Store original video track
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         originalVideoTrack.current = videoTrack;
       }
       
-      // Update states
       setIsVideoEnabled(stream.getVideoTracks().length > 0);
       setIsAudioEnabled(stream.getAudioTracks().length > 0);
 
-      // Start audio level monitoring
       if (stream.getAudioTracks().length > 0) {
         startAudioLevelMonitoring(stream);
       }
@@ -307,21 +379,24 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       
     } catch (error) {
       console.error('❌ Failed to start local stream:', error);
-      setMediaError(error);
-      
-      if (error.name === 'NotAllowedError') {
-        toast.error('Permission denied - please allow camera/microphone access');
-      } else if (error.name === 'NotFoundError') {
-        toast.error('No camera/microphone found');
-      } else {
-        toast.error('Failed to access media: ' + error.message);
+      if (mountedRef.current) {
+        setMediaError(error);
+        
+        if (error.name === 'NotAllowedError') {
+          toast.error('Permission denied - please allow camera/microphone access');
+        } else if (error.name === 'NotFoundError') {
+          toast.error('No camera/microphone found');
+        } else {
+          toast.error('Failed to access media: ' + error.message);
+        }
       }
       throw error;
     }
   }, [startAudioLevelMonitoring]);
 
+  // ✅ Rest of the functions with mount checks
   const toggleAudio = useCallback(() => {
-    if (!localStream) return;
+    if (!localStream || !mountedRef.current) return false;
     
     const newState = !isAudioEnabled;
     setIsAudioEnabled(newState);
@@ -331,10 +406,11 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     });
     
     toast.info(newState ? 'Microphone enabled' : 'Microphone disabled');
+    return true;
   }, [isAudioEnabled, localStream]);
 
   const toggleVideo = useCallback(() => {
-    if (!localStream) return;
+    if (!localStream || !mountedRef.current) return false;
     
     const newState = !isVideoEnabled;
     setIsVideoEnabled(newState);
@@ -344,39 +420,35 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     });
     
     toast.info(newState ? 'Camera enabled' : 'Camera disabled');
+    return true;
   }, [isVideoEnabled, localStream]);
 
   const startScreenShare = useCallback(async () => {
+    if (!webRTCManagerRef.current || !mountedRef.current) return false;
+
     try {
       console.log('🖥️ Starting screen share...');
 
-      if (!webRTCManagerRef.current) {
-        throw new Error('WebRTC not initialized');
-      }
-
       const screenStream = await webRTCManagerRef.current.startScreenShare();
 
-      // Create new stream with screen video + original audio
       const newStream = new MediaStream([
         screenStream.getVideoTracks()[0],
         ...(localStream ? localStream.getAudioTracks() : [])
       ]);
 
-      // Update local stream state
+      if (!mountedRef.current) return false;
+
       setLocalStream(newStream);
 
-      // Force update the video element
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = newStream;
         console.log('📺 Updated local video element with screen share');
 
-        // Ensure video plays
         localVideoRef.current.play().catch(e => {
           console.warn('Video play failed:', e);
         });
       }
 
-      // Handle screen share end
       const videoTrack = screenStream.getVideoTracks()[0];
       if (videoTrack) {
         videoTrack.onended = () => {
@@ -386,22 +458,25 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       }
 
       setIsScreenSharing(true);
-      setIsVideoEnabled(true); // Ensure video is marked as enabled
+      setIsVideoEnabled(true);
       toast.success('Screen sharing started');
+      return true;
 
     } catch (error) {
       console.error('❌ Screen share failed:', error);
-      toast.error('Screen share failed: ' + error.message);
+      if (mountedRef.current) {
+        toast.error('Screen share failed: ' + error.message);
+      }
+      return false;
     }
   }, [localStream, handleStopScreenShare]);
 
-  // Public stopScreenShare function
   const stopScreenShare = useCallback(async () => {
-    await handleStopScreenShare();
+    return await handleStopScreenShare();
   }, [handleStopScreenShare]);
 
   const connectToUser = useCallback(async (userId) => {
-    if (webRTCManagerRef.current && localStream) {
+    if (webRTCManagerRef.current && localStream && mountedRef.current) {
       await webRTCManagerRef.current.connectToUser(userId);
     }
   }, [localStream]);
@@ -411,25 +486,15 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       webRTCManagerRef.current.cleanup();
     }
 
-    // Stop audio monitoring
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
+    stopAudioLevelMonitoring();
+
+    if (mountedRef.current) {
+      setLocalStream(null);
+      setRemoteStreams(new Map());
+      setConnectionStates(new Map());
+      setIsInitialized(false);
     }
-
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    analyserRef.current = null;
-    setAudioLevel(0);
-
-    setLocalStream(null);
-    setRemoteStreams(new Map());
-    setConnectionStates(new Map());
-    setIsInitialized(false);
-  }, []);
+  }, [stopAudioLevelMonitoring]);
 
   return {
     // State
@@ -454,6 +519,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     stopScreenShare,
     connectToUser,
     cleanupWebRTC,
+    initializeWebRTC,
     startAudioLevelMonitoring,
     stopAudioLevelMonitoring,
 

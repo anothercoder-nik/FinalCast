@@ -27,8 +27,20 @@ const VideoGrid = ({
   // Effect to update local video when stream changes
   useEffect(() => {
     if (localVideoRef.current && localStream) {
+      console.log('📺 VideoGrid: Updating local video element');
       localVideoRef.current.srcObject = localStream;
-      console.log('📺 VideoGrid: Updated local video element');
+
+      // Ensure video properties are set
+      localVideoRef.current.muted = true;
+      localVideoRef.current.autoplay = true;
+      localVideoRef.current.playsInline = true;
+
+      // Play the video
+      localVideoRef.current.play().then(() => {
+        console.log('✅ VideoGrid: Local video playing');
+      }).catch(error => {
+        console.warn('⚠️ VideoGrid: Local video play failed:', error);
+      });
     }
   }, [localStream, localVideoRef]);
 

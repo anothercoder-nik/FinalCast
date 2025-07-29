@@ -91,6 +91,18 @@ class WebRTCManager {
         this.updateUserSocketMapping(userId, socketId);
       }
 
+      // Ensure we have a local stream before creating peer connection
+      if (!this.localStream) {
+        console.warn(`⚠️ No local stream available when connecting to ${userId}`);
+        // Try to get local stream
+        try {
+          this.localStream = await mediaManager.getLocalStream();
+          console.log('✅ Got local stream for peer connection');
+        } catch (streamError) {
+          console.error('❌ Failed to get local stream:', streamError);
+        }
+      }
+
       const peerConnection = await this.createPeerConnection(userId, true);
 
       // Create and send offer
@@ -189,8 +201,14 @@ class WebRTCManager {
           }, 5000); // Wait 5 seconds for reconnection
           break;
         case 'failed':
-          console.log(`❌ Connection failed for ${userId}`);
+          console.log(`❌ Connection failed for ${userId}, attempting reconnection...`);
           this.closePeerConnection(userId);
+
+          // Attempt to reconnect after a delay
+          setTimeout(() => {
+            console.log(`🔄 Reconnecting to ${userId}...`);
+            this.connectToUser(userId);
+          }, 2000);
           break;
         case 'closed':
           console.log(`🔒 Connection closed for ${userId}`);
