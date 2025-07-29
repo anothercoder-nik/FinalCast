@@ -110,18 +110,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         if (!mountedRef.current) return;
 
         setLocalStream(cameraStream);
-
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = cameraStream;
-          console.log('📺 Restored camera video in local element');
-
-          try {
-            await localVideoRef.current.play();
-            console.log('✅ Camera video playing after screen share stop');
-          } catch (playError) {
-            console.warn('⚠️ Camera video play failed:', playError);
-          }
-        }
+        console.log('📺 Camera stream restored - VideoGrid will handle video element');
       }
 
       setIsScreenSharing(false);
@@ -158,35 +147,9 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
           if (mountedRef.current) {
             setLocalStream(stream);
             
-            // Set up local video element immediately
+            // Local video element setup will be handled by VideoGrid to avoid race conditions
             if (localVideoRef.current) {
-              console.log('📺 Setting up local video element with stream');
-              localVideoRef.current.srcObject = stream;
-              localVideoRef.current.muted = true;
-              localVideoRef.current.autoplay = true;
-              localVideoRef.current.playsInline = true;
-
-              // Force play immediately
-              const playVideo = async () => {
-                try {
-                  await localVideoRef.current.play();
-                  console.log('✅ Local video playing from callback');
-                } catch (playError) {
-                  console.warn('⚠️ Local video play failed from callback, retrying...', playError);
-                  // Retry after a short delay
-                  setTimeout(async () => {
-                    try {
-                      if (localVideoRef.current && mountedRef.current) {
-                        await localVideoRef.current.play();
-                        console.log('✅ Local video playing (retry from callback)');
-                      }
-                    } catch (retryError) {
-                      console.error('❌ Local video retry failed from callback:', retryError);
-                    }
-                  }, 500);
-                }
-              };
-              playVideo();
+              console.log('📺 Local stream ready - VideoGrid will handle video element setup');
             }
             
             // Set track states
@@ -252,23 +215,11 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         setIsInitialized(true);
         console.log('✅ WebRTC initialized successfully');
         
-        // Ensure local video is set up if stream is already available
-        if (webRTCManagerRef.current?.localStream && localVideoRef.current) {
-          console.log('🔄 Setting up local video after initialization');
+        // Ensure local stream state is updated if stream is already available
+        if (webRTCManagerRef.current?.localStream) {
+          console.log('🔄 Local stream available after initialization - VideoGrid will handle video element');
           const stream = webRTCManagerRef.current.localStream;
           setLocalStream(stream);
-          
-          localVideoRef.current.srcObject = stream;
-          localVideoRef.current.muted = true;
-          localVideoRef.current.autoplay = true;
-          localVideoRef.current.playsInline = true;
-          
-          // Force play
-          localVideoRef.current.play().then(() => {
-            console.log('✅ Local video playing after manual setup');
-          }).catch(error => {
-            console.warn('⚠️ Local video play failed after manual setup:', error);
-          });
           
           // Set track states
           setIsVideoEnabled(stream.getVideoTracks().length > 0);
@@ -421,38 +372,11 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     };
   }, [socket, currentUser, initializeWebRTC]);
 
-  // ✅ Update local video when stream changes
+    // ✅ Monitor local stream changes (but let VideoGrid handle video element setup)
   useEffect(() => {
-    if (localStream && localVideoRef.current && mountedRef.current) {
-      console.log('🎥 Local stream changed, updating video element');
-      localVideoRef.current.srcObject = localStream;
-      
-      localVideoRef.current.muted = true;
-      localVideoRef.current.autoplay = true;
-      localVideoRef.current.playsInline = true;
-
-      // Force load and play with retry
-      localVideoRef.current.load();
-
-      const playVideo = async () => {
-        try {
-          await localVideoRef.current.play();
-          console.log('✅ Local video playing successfully');
-        } catch (error) {
-          console.warn('⚠️ Failed to play local video:', error);
-          // Retry after a short delay
-          setTimeout(async () => {
-            try {
-              await localVideoRef.current.play();
-              console.log('✅ Local video playing after retry');
-            } catch (retryError) {
-              console.error('❌ Local video play failed after retry:', retryError);
-            }
-          }, 100);
-        }
-      };
-
-      playVideo();
+    if (localStream && mountedRef.current) {
+      console.log('🎥 Local stream available in useWebRTC');
+      // VideoGrid will handle the video element setup to avoid race conditions
     }
   }, [localStream]);
 
@@ -484,42 +408,8 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       if (!mountedRef.current) return stream;
       
       setLocalStream(stream);
+      console.log('📺 Local stream set - VideoGrid will handle video element');
 
-      if (localVideoRef.current) {
-        console.log('📺 Setting up local video element');
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.muted = true;
-        localVideoRef.current.autoplay = true;
-        localVideoRef.current.playsInline = true;
-
-        // Enhanced play with multiple retries and increasing delays
-        const playVideo = async (retries = 3) => {
-          try {
-            await localVideoRef.current.play();
-            console.log(`✅ Local video playing successfully`);
-          } catch (playError) {
-            console.warn(`⚠️ Local video play failed (attempt ${4-retries}):`, playError.message);
-            if (retries > 0) {
-              const delay = 200 * (4-retries); // Increasing delay: 200ms, 400ms, 600ms
-              setTimeout(() => {
-                if (localVideoRef.current && mountedRef.current) {
-                  playVideo(retries - 1);
-                }
-              }, delay);
-            } else {
-              console.error('❌ Local video play failed after all retries');
-            }
-          }
-        };
-
-        // Start playing with a small initial delay
-        setTimeout(() => {
-          if (localVideoRef.current && mountedRef.current) {
-            playVideo();
-          }
-        }, 100);
-      }
-      
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         originalVideoTrack.current = videoTrack;
@@ -608,15 +498,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       if (!mountedRef.current) return false;
 
       setLocalStream(newStream);
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = newStream;
-        console.log('📺 Updated local video element with screen share');
-
-        localVideoRef.current.play().catch(e => {
-          console.warn('Video play failed:', e);
-        });
-      }
+      console.log('📺 Screen share stream set - VideoGrid will handle video element');
 
       const videoTrack = screenStream.getVideoTracks()[0];
       if (videoTrack) {

@@ -18,69 +18,33 @@ const VideoGrid = ({
 }) => {
   const remoteVideoRefs = useRef(new Map());
 
-  // Safe video play function with AbortError handling
+  // Simple video play function - like other websites do it
   const playVideoSafely = useCallback(async (videoElement, userId) => {
     if (!videoElement || !videoElement.srcObject) return;
 
-    // Check if video is already playing
-    if (!videoElement.paused && !videoElement.ended) {
-      console.log(`📺 Video already playing for ${userId}`);
-      return;
-    }
-    
-    // Prevent multiple concurrent play attempts
-    if (videoElement._isPlaying) {
-      console.log(`📺 Video play already in progress for ${userId}`);
-      return;
-    }
-
     try {
-      videoElement._isPlaying = true;
       await videoElement.play();
       console.log(`✅ Video playing for ${userId}`);
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.log(`🔄 Video play aborted for ${userId}, will retry...`);
-        // Retry after a short delay if video is still paused
-        setTimeout(() => {
-          if (videoElement.srcObject && videoElement.paused && !videoElement._isPlaying) {
-            playVideoSafely(videoElement, userId);
-          }
-        }, 100);
-      } else {
-        console.warn(`⚠️ Video play failed for ${userId}:`, error.message);
-        
-        // Retry for other errors after a delay (except user gesture required)
-        if (error.name !== 'NotAllowedError') {
-          setTimeout(() => {
-            if (videoElement.srcObject && videoElement.paused) {
-              playVideoSafely(videoElement, userId);
-            }
-          }, 500);
-        }
-      }
-    } finally {
-      videoElement._isPlaying = false;
+      console.warn(`⚠️ Video play failed for ${userId}:`, error.message);
     }
   }, []);
 
-  // Update remote video elements when streams change
+  // Simple remote video update - like other websites
   useEffect(() => {
     if (!remoteStreams) return;
 
     remoteStreams.forEach((stream, userId) => {
       const videoElement = remoteVideoRefs.current.get(userId);
       if (videoElement && videoElement.srcObject !== stream) {
-        console.log(`📺 Updating remote video source for ${userId}`);
+        console.log(`📺 Setting remote video stream for ${userId}`);
         videoElement.srcObject = stream;
-        
-        // Play after metadata is loaded
-        videoElement.onloadedmetadata = () => {
-          playVideoSafely(videoElement, userId);
-        };
+        videoElement.play().catch(e => 
+          console.warn(`Remote video play failed for ${userId}:`, e.message)
+        );
       }
     });
-  }, [remoteStreams, playVideoSafely]);
+  }, [remoteStreams]);
 
   // Cleanup effect
   useEffect(() => {
@@ -99,26 +63,23 @@ const VideoGrid = ({
     return 'grid-cols-4';
   };
 
-  // Effect to update local video when stream changes
+  // Simple effect to update local video when stream changes - like other websites
   useEffect(() => {
     if (localVideoRef.current && localStream) {
-      console.log('📺 VideoGrid: Updating local video element');
+      console.log('📺 VideoGrid: Setting local video stream');
       
-      // Only update srcObject if it's different
-      if (localVideoRef.current.srcObject !== localStream) {
-        console.log('🎥 Local stream changed, updating video element');
-        localVideoRef.current.srcObject = localStream;
+      // Set the stream and basic properties
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.muted = true;
+      localVideoRef.current.autoplay = true;
+      localVideoRef.current.playsInline = true;
 
-        // Ensure video properties are set
-        localVideoRef.current.muted = true;
-        localVideoRef.current.autoplay = true;
-        localVideoRef.current.playsInline = true;
-
-        // Use safe play function
-        playVideoSafely(localVideoRef.current, 'local');
-      }
+      // Simple play - no complex logic
+      localVideoRef.current.play().catch(e => 
+        console.warn('Local video play failed:', e.message)
+      );
     }
-  }, [localStream, localVideoRef, playVideoSafely]);
+  }, [localStream, localVideoRef]);
 
   const hasVideo = localStream?.getVideoTracks().some(track => track.enabled) || false;
   const hasAudio = localStream?.getAudioTracks().some(track => track.enabled) || false;
@@ -148,44 +109,14 @@ const VideoGrid = ({
                 playsInline
                 className="w-full h-full object-cover"
                 style={{
-                  backgroundColor: '#1a1a1a',
-                  // Mobile-specific optimizations
-                  WebkitTransform: 'translateZ(0)', // Enable hardware acceleration on iOS
-                  transform: 'translateZ(0)',
-                  WebkitBackfaceVisibility: 'hidden',
-                  backfaceVisibility: 'hidden',
-                  // Touch handling improvements
-                  touchAction: 'manipulation',
-                  // Prevent iOS zoom on video tap
-                  WebkitUserSelect: 'none',
-                  userSelect: 'none'
+                  backgroundColor: '#1a1a1a'
                 }}
                 onLoadedMetadata={() => {
-                  console.log('📺 Local video loaded');
-                  // Set mobile-specific attributes
-                  if (localVideoRef.current) {
-                    localVideoRef.current.setAttribute('webkit-playsinline', 'true');
-                    localVideoRef.current.setAttribute('x5-video-player-type', 'h5');
-                    localVideoRef.current.setAttribute('x5-video-player-fullscreen', 'true');
-                    localVideoRef.current.setAttribute('x5-video-orientation', 'portrait');
-                    // Force play
-                    localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
-                  }
-                }}
-                onCanPlay={() => {
-                  console.log('📺 Local video can play');
-                  if (localVideoRef.current) {
-                    localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
-                  }
+                  console.log('📺 Local video metadata loaded');
                 }}
                 onError={(e) => {
-                  console.error('❌ Local video error:', e);
+                  console.error('❌ Local video error:', e.target.error);
                 }}
-                // Additional mobile-specific attributes
-                webkit-playsinline="true"
-                x5-video-player-type="h5"
-                x5-video-player-fullscreen="true"
-                x5-video-orientation="portrait"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -234,47 +165,18 @@ const VideoGrid = ({
                   muted={false}
                   className="w-full h-full object-cover"
                   style={{
-                    backgroundColor: '#1a1a1a',
-                    // Mobile-specific optimizations
-                    WebkitTransform: 'translateZ(0)', // Enable hardware acceleration on iOS
-                    transform: 'translateZ(0)',
-                    WebkitBackfaceVisibility: 'hidden',
-                    backfaceVisibility: 'hidden',
-                    // Touch handling improvements
-                    touchAction: 'manipulation',
-                    // Prevent iOS zoom on video tap
-                    WebkitUserSelect: 'none',
-                    userSelect: 'none'
+                    backgroundColor: '#1a1a1a'
                   }}
                   ref={(videoElement) => {
                     if (videoElement) {
-                      // Store the video element reference
                       remoteVideoRefs.current.set(userId, videoElement);
-                      
-                      // Mobile-specific video attributes
-                      videoElement.setAttribute('webkit-playsinline', 'true');
-                      videoElement.setAttribute('x5-video-player-type', 'h5');
-                      videoElement.setAttribute('x5-video-player-fullscreen', 'true');
-                      videoElement.setAttribute('x5-video-orientation', 'portrait');
-                      
-                      // Only set srcObject if it's different to prevent AbortError
                       if (videoElement.srcObject !== stream) {
-                        console.log(`📺 Set remote video for ${userId}`);
                         videoElement.srcObject = stream;
-                        
-                        // Use onloadedmetadata instead of immediate play
-                        videoElement.onloadedmetadata = () => {
-                          playVideoSafely(videoElement, userId);
-                        };
                       }
                     } else {
-                      // Clean up when element is removed
                       remoteVideoRefs.current.delete(userId);
                     }
                   }}
-                  onLoadedMetadata={() => console.log(`📺 Remote video metadata loaded for ${userId}`)}
-                  onCanPlay={() => console.log(`📺 Remote video can play for ${userId}`)}
-                  onError={(e) => console.warn(`❌ Remote video error for ${userId}:`, e.target.error)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">

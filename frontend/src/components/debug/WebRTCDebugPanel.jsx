@@ -107,23 +107,85 @@ const WebRTCDebugPanel = ({ webRTCManager, localStream, remoteStreams, connectio
 
   const forcePlay = () => {
     if (webRTCManager) {
-      console.log('🎬 Forcing video/audio play...');
+      console.log('🎬 Forcing video/audio play with enhanced diagnostics...');
+      
       // Find all video and audio elements and try to play them
       const videos = document.querySelectorAll('video');
       const audios = document.querySelectorAll('audio');
       
       videos.forEach((video, index) => {
+        console.log(`📺 Video ${index} diagnosis:`, {
+          hasSrcObject: !!video.srcObject,
+          paused: video.paused,
+          muted: video.muted,
+          autoplay: video.autoplay,
+          playsInline: video.playsInline,
+          readyState: video.readyState,
+          networkState: video.networkState,
+          currentTime: video.currentTime,
+          duration: video.duration,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          streamTracks: video.srcObject ? {
+            video: video.srcObject.getVideoTracks().length,
+            audio: video.srcObject.getAudioTracks().length,
+            videoEnabled: video.srcObject.getVideoTracks()[0]?.enabled,
+            audioEnabled: video.srcObject.getAudioTracks()[0]?.enabled
+          } : null
+        });
+        
         if (video.srcObject) {
-          console.log(`Playing video ${index}:`, video.srcObject);
-          video.play().catch(e => console.error('Video play failed:', e));
+          // Force all necessary attributes
+          video.muted = true; // Local video should be muted
+          video.autoplay = true;
+          video.playsInline = true;
+          
+          // Try to play with retry logic
+          const attemptPlay = async (retries = 3) => {
+            try {
+              await video.play();
+              console.log(`✅ Video ${index} playing successfully`);
+            } catch (e) {
+              console.warn(`⚠️ Video ${index} play attempt failed:`, e.message);
+              if (retries > 0) {
+                setTimeout(() => attemptPlay(retries - 1), 200);
+              } else {
+                console.error(`❌ Video ${index} failed all play attempts`);
+              }
+            }
+          };
+          
+          attemptPlay();
+        } else {
+          console.warn(`⚠️ Video ${index} has no srcObject`);
         }
       });
       
       audios.forEach((audio, index) => {
+        console.log(`🔊 Audio ${index} diagnosis:`, {
+          hasSrcObject: !!audio.srcObject,
+          paused: audio.paused,
+          muted: audio.muted,
+          readyState: audio.readyState,
+          currentTime: audio.currentTime
+        });
+        
         if (audio.srcObject) {
-          console.log(`Playing audio ${index}:`, audio.srcObject);
-          audio.play().catch(e => console.error('Audio play failed:', e));
+          audio.play().catch(e => console.error(`Audio ${index} play failed:`, e));
         }
+      });
+      
+      // Also log current stream states
+      console.log('📊 Current stream states:', {
+        localStream: !!localStream,
+        localStreamTracks: localStream ? {
+          video: localStream.getVideoTracks().length,
+          audio: localStream.getAudioTracks().length,
+          videoEnabled: localStream.getVideoTracks()[0]?.enabled,
+          audioEnabled: localStream.getAudioTracks()[0]?.enabled
+        } : null,
+        remoteStreamsCount: remoteStreams?.size || 0,
+        managerLocalStream: !!webRTCManager.localStream
       });
     }
   };
