@@ -8,19 +8,39 @@
 - ✅ **SPA routing**: Added _redirects and vercel.json for proper routing
 - ✅ **Environment variables**: Corrected VITE_API_URL usage
 - ✅ **Vite config**: Added SPA fallback configuration
+- ✅ **CORS Configuration**: Added specific Render.com domains + debugging
+
+## CORS Fix for Render.com Deployment
+
+**Problem**: Frontend (`https://finalcast.onrender.com`) blocked from accessing backend (`https://finalcast1.onrender.com`)
+
+**Solution Applied**:
+```javascript
+const allowedOrigins = [
+    // Specific Render.com domains
+    "https://finalcast.onrender.com",
+    "https://finalcast1.onrender.com",
+    // Plus regex patterns for flexibility
+    /https:\/\/.*\.onrender\.com$/,
+    // Environment variable support
+    process.env.FRONTEND_URL,
+    // Development fallbacks
+    "http://localhost:5173",
+]
+```
 
 ## Environment Setup
 
-### Frontend (.env)
+### Frontend (.env.production)
 ```env
-VITE_API_URL=https://your-backend-domain.com
+VITE_API_URL=https://finalcast1.onrender.com
 ```
 
-### Backend (.env)
+### Backend (.env.production)
 ```env
 PORT=3000
 NODE_ENV=production
-FRONTEND_URL=https://your-frontend-domain.com
+FRONTEND_URL=https://finalcast.onrender.com
 MONGODB_URI=your-production-mongodb-uri
 JWT_SECRET=your-secure-jwt-secret
 GOOGLE_CLIENT_ID=your-google-oauth-client-id

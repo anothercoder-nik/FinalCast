@@ -36,6 +36,9 @@ const allowedOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
     process.env.FRONTEND_URL,
+    // Add specific Render.com domains
+    "https://finalcast.onrender.com",
+    "https://finalcast1.onrender.com",
     // Add common production patterns
     ...(process.env.FRONTEND_URL ? [
       process.env.FRONTEND_URL.replace(/\/$/, ''), // Remove trailing slash
@@ -51,20 +54,31 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
+    console.log(`🔍 CORS check for origin: ${origin}`);
+    console.log(`📝 Allowed origins:`, allowedOrigins);
+    
     // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      console.log(`✅ No origin - allowing request`);
+      return callback(null, true);
+    }
     
     // Check if origin matches any allowed origins
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
-        return allowedOrigin === origin;
+        const match = allowedOrigin === origin;
+        console.log(`🔍 String check: "${allowedOrigin}" === "${origin}" = ${match}`);
+        return match;
       } else if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
+        const match = allowedOrigin.test(origin);
+        console.log(`🔍 Regex check: ${allowedOrigin} test "${origin}" = ${match}`);
+        return match;
       }
       return false;
     });
     
     if (isAllowed) {
+      console.log(`✅ CORS allowed for origin: ${origin}`);
       callback(null, true);
     } else {
       console.warn(`🚫 CORS blocked origin: ${origin}`);
@@ -78,18 +92,33 @@ app.use(cors({
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
+      console.log(`🔌 Socket.IO CORS check for origin: ${origin}`);
+      
       // Allow requests with no origin
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log(`✅ Socket.IO: No origin - allowing request`);
+        return callback(null, true);
+      }
       
       // Check if origin matches any allowed origins
       const isAllowed = allowedOrigins.some(allowedOrigin => {
         if (typeof allowedOrigin === 'string') {
-          return allowedOrigin === origin;
+          const match = allowedOrigin === origin;
+          console.log(`🔍 Socket.IO String check: "${allowedOrigin}" === "${origin}" = ${match}`);
+          return match;
         } else if (allowedOrigin instanceof RegExp) {
-          return allowedOrigin.test(origin);
+          const match = allowedOrigin.test(origin);
+          console.log(`🔍 Socket.IO Regex check: ${allowedOrigin} test "${origin}" = ${match}`);
+          return match;
         }
         return false;
       });
+      
+      if (isAllowed) {
+        console.log(`✅ Socket.IO CORS allowed for origin: ${origin}`);
+      } else {
+        console.warn(`🚫 Socket.IO CORS blocked origin: ${origin}`);
+      }
       
       callback(null, isAllowed);
     },
@@ -103,6 +132,16 @@ const io = new Server(server, {
 
 // Use the socket handler HERE
 setupSocketHandlers(io);
+
+// Add a simple CORS test endpoint
+app.get('/api/test', (req, res) => {
+  console.log(`🧪 Test endpoint called from origin: ${req.get('Origin')}`);
+  res.json({ 
+    message: 'CORS test successful!', 
+    origin: req.get('Origin'),
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Your existing routes
 app.use("/api/auth", authRoutes);
