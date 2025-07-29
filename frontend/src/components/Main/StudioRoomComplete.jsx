@@ -200,6 +200,23 @@ const ControlBar = ({
             </Button>
           )}
 
+          {/* Debug button for testing */}
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              onClick={() => {
+                console.log('🔍 Debug Info:', getDebugInfo());
+                console.log('📊 Local Stream:', localStream);
+                console.log('📊 Remote Streams:', remoteStreams);
+                console.log('📊 Online Participants:', onlineParticipants);
+              }}
+              variant="outline"
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Debug
+            </Button>
+          )}
+
           {/* Join/Leave button with improved hover */}
           {isJoined ? (
             <Button
@@ -778,7 +795,7 @@ export const StudioRoomComplete = () => {
       });
 
       // Connect via WebRTC if we have local stream and it's not ourselves
-      if (data.shouldConnect && data.userId !== currentUser._id && localStream && isInitialized) {
+      if (data.shouldConnect && currentUser && data.userId !== currentUser._id && localStream && isInitialized) {
         console.log(`🔗 Connecting to ${data.userName} via WebRTC`);
         connectToUser(data.userId);
       }
@@ -797,12 +814,12 @@ export const StudioRoomComplete = () => {
       console.log('👥 Current participants for WebRTC:', participants);
       setOnlineParticipants(participants);
       
-      // Connect to all existing participants if we have local stream
-      if (localStream && isInitialized) {
+      // Connect to all existing participants via WebRTC hook
+      if (isInitialized) {
         participants.forEach(participant => {
-          if (participant.userId !== currentUser._id) {
-            console.log(`🔗 Connecting to existing participant: ${participant.userName}`);
-            connectToUser(participant.userId);
+          if (currentUser && participant.userId !== currentUser._id) {
+            console.log(`🔗 Connecting to existing participant: ${participant.userName} (${participant.userId})`);
+            // The useWebRTC hook will handle this connection
           }
         });
       }
@@ -815,7 +832,7 @@ export const StudioRoomComplete = () => {
       removeEventListener('user-joined', handleUserJoined);
       removeEventListener('current-participants', handleCurrentParticipants);
     };
-  }, [isConnected, currentUser._id, localStream, isInitialized, connectToUser, addEventListener, removeEventListener]);
+  }, [isConnected, currentUser?._id, localStream, isInitialized, connectToUser, addEventListener, removeEventListener]);
 
   // Event handlers for WebRTC controls
   const handleToggleAudio = () => {
@@ -1087,7 +1104,12 @@ export const StudioRoomComplete = () => {
         console.log('🚀 Starting session with permissions...');
 
         // Ensure WebRTC is initialized and get media stream
-        if (isInitialized && !localStream) {
+        if (!isInitialized && !isInitializing) {
+          console.log('🎥 Initializing WebRTC for host...');
+          await initializeWebRTC();
+        }
+
+        if (!localStream) {
           console.log('🎥 Starting local media stream...');
           await startLocalStream();
         }
@@ -1165,18 +1187,16 @@ export const StudioRoomComplete = () => {
         // Host ending the session for everyone
         const confirmed = window.confirm('Are you sure you want to end this session for everyone?');
         if (!confirmed) return;
-        
+
         // End session via socket (will notify all participants)
-        socketEndSession(
-          
-          {
+        socketEndSession({
           roomId,
           userId: currentUser._id
         });
-        
+
         // Update backend
         await updateSessionStatus(session._id, 'ended');
-        
+
         // Redirect after delay
         setTimeout(() => {
           navigate({ to: '/studios' });
@@ -1247,6 +1267,20 @@ export const StudioRoomComplete = () => {
           <p className="text-red-400 mb-4">{error}</p>
           <Button onClick={() => navigate({ to: '/studios' })} className="bg-blue-600 hover:bg-blue-700">
             Back to Studios
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if user is authenticated
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-stone-300 mb-4">Please log in to access the studio</p>
+          <Button onClick={() => navigate({ to: '/' })} className="bg-blue-600 hover:bg-blue-700">
+            Go to Login
           </Button>
         </div>
       </div>

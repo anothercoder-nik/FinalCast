@@ -61,14 +61,26 @@ const VideoGrid = ({
         {/* Local video (current user) */}
         {onlineParticipants.some(p => p.userId === currentUser._id) && (
           <div className="relative bg-stone-800 rounded-lg overflow-hidden">
-            {localStream && hasVideo ? (
+            {localStream ? (
               <video
                 ref={localVideoRef}
                 autoPlay
                 muted
                 playsInline
                 className="w-full h-full object-cover"
-                onLoadedMetadata={() => console.log('📺 Local video loaded')}
+                onLoadedMetadata={() => {
+                  console.log('📺 Local video loaded');
+                  // Force play
+                  if (localVideoRef.current) {
+                    localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
+                  }
+                }}
+                onCanPlay={() => {
+                  console.log('📺 Local video can play');
+                  if (localVideoRef.current) {
+                    localVideoRef.current.play().catch(e => console.warn('Play failed:', e));
+                  }
+                }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
@@ -110,7 +122,7 @@ const VideoGrid = ({
           
           return (
             <div key={userId} className="relative bg-stone-800 rounded-lg overflow-hidden">
-              {hasRemoteVideo ? (
+              {stream ? (
                 <video
                   autoPlay
                   playsInline
@@ -121,13 +133,24 @@ const VideoGrid = ({
                       videoElement.srcObject = stream;
                       console.log(`📺 Set remote video for ${userId}`);
 
-                      // Ensure video plays
-                      videoElement.play().catch(e => {
-                        console.warn(`⚠️ Remote video play failed for ${userId}:`, e);
-                      });
+                      // Force play immediately
+                      const playVideo = async () => {
+                        try {
+                          await videoElement.play();
+                          console.log(`✅ Remote video playing for ${userId}`);
+                        } catch (e) {
+                          console.warn(`⚠️ Remote video play failed for ${userId}:`, e);
+                          // Retry after a short delay
+                          setTimeout(() => {
+                            videoElement.play().catch(err => console.warn('Retry failed:', err));
+                          }, 100);
+                        }
+                      };
+                      playVideo();
                     }
                   }}
                   onLoadedMetadata={() => console.log(`📺 Remote video loaded for ${userId}`)}
+                  onCanPlay={() => console.log(`📺 Remote video can play for ${userId}`)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">

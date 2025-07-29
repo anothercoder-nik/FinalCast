@@ -238,16 +238,38 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
 
   // ✅ Fixed socket event handlers with proper checks
   useEffect(() => {
-    if (!socket || !webRTCManagerRef.current || !currentUser) return;
+    if (!socket || !currentUser) return;
 
     const handleCurrentParticipants = async (participants) => {
       if (!participants || !Array.isArray(participants) || !mountedRef.current) return;
-      
+
       console.log('🤝 Setting up WebRTC with existing participants:', participants.length);
+
+      // Ensure WebRTC is initialized first
+      if (!webRTCManagerRef.current) {
+        console.log('🚀 WebRTC not initialized, initializing for participants...');
+        try {
+          await initializeWebRTC();
+        } catch (err) {
+          console.error('❌ Failed to initialize WebRTC for participants:', err);
+          return;
+        }
+      }
+
+      // Ensure we have local stream before connecting to others
+      if (!webRTCManagerRef.current?.localStream) {
+        console.log('🎥 No local stream, starting it before connecting to participants...');
+        try {
+          await webRTCManagerRef.current?.startLocalStream();
+        } catch (err) {
+          console.error('❌ Failed to start local stream for participant connections:', err);
+        }
+      }
 
       for (const participant of participants) {
         if (participant?.userId && participant.userId !== currentUser._id) {
           try {
+            console.log(`🔗 Connecting to existing participant: ${participant.userName} (${participant.userId})`);
             webRTCManagerRef.current.updateUserSocketMapping(participant.userId, participant.socketId);
             await webRTCManagerRef.current.connectToUser(participant.userId, participant.socketId);
           } catch (error) {
@@ -259,9 +281,31 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
 
     const handleUserJoined = async (userData) => {
       if (!userData || !mountedRef.current) return;
-      
+
       if (userData.userId !== currentUser._id && userData.shouldConnect) {
         console.log('🤝 New user joined, establishing WebRTC connection:', userData.userId);
+
+        // Ensure WebRTC is initialized
+        if (!webRTCManagerRef.current) {
+          console.log('🚀 WebRTC not initialized for new user, initializing...');
+          try {
+            await initializeWebRTC();
+          } catch (err) {
+            console.error('❌ Failed to initialize WebRTC for new user:', err);
+            return;
+          }
+        }
+
+        // Ensure we have local stream
+        if (!webRTCManagerRef.current.localStream) {
+          console.log('🎥 Starting local stream for new connection...');
+          try {
+            await webRTCManagerRef.current.startLocalStream();
+          } catch (err) {
+            console.error('❌ Failed to start local stream:', err);
+          }
+        }
+
         try {
           webRTCManagerRef.current.updateUserSocketMapping(userData.userId, userData.socketId);
           await webRTCManagerRef.current.connectToUser(userData.userId, userData.socketId);
@@ -296,7 +340,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       socket.off('user-joined', handleUserJoined);
       socket.off('user-left', handleUserLeft);
     };
-  }, [socket, currentUser, isInitialized]);
+  }, [socket, currentUser, initializeWebRTC]);
 
   // ✅ Update local video when stream changes
   useEffect(() => {
@@ -308,9 +352,28 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       localVideoRef.current.autoplay = true;
       localVideoRef.current.playsInline = true;
 
-      localVideoRef.current.play().catch(error => {
-        console.warn('⚠️ Failed to play local video:', error);
-      });
+      // Force load and play with retry
+      localVideoRef.current.load();
+
+      const playVideo = async () => {
+        try {
+          await localVideoRef.current.play();
+          console.log('✅ Local video playing successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to play local video:', error);
+          // Retry after a short delay
+          setTimeout(async () => {
+            try {
+              await localVideoRef.current.play();
+              console.log('✅ Local video playing after retry');
+            } catch (retryError) {
+              console.error('❌ Local video play failed after retry:', retryError);
+            }
+          }, 100);
+        }
+      };
+
+      playVideo();
     }
   }, [localStream]);
 
@@ -321,9 +384,16 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
     try {
       console.log('📹 Starting local stream...');
       setMediaError(null);
-      
+
+      // Ensure WebRTC is initialized first
       if (!webRTCManagerRef.current) {
-        throw new Error('WebRTC not initialized');
+        console.log('🚀 WebRTC not initialized, initializing now...');
+        await initializeWebRTC();
+
+        // Double check after initialization
+        if (!webRTCManagerRef.current) {
+          throw new Error('Failed to initialize WebRTC');
+        }
       }
       
       const stream = await webRTCManagerRef.current.startLocalStream();
@@ -392,7 +462,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       }
       throw error;
     }
-  }, [startAudioLevelMonitoring]);
+  }, [startAudioLevelMonitoring, initializeWebRTC]);
 
   // ✅ Rest of the functions with mount checks
   const toggleAudio = useCallback(() => {
@@ -424,7 +494,18 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
   }, [isVideoEnabled, localStream]);
 
   const startScreenShare = useCallback(async () => {
-    if (!webRTCManagerRef.current || !mountedRef.current) return false;
+    if (!mountedRef.current) return false;
+
+    // Ensure WebRTC is initialized
+    if (!webRTCManagerRef.current) {
+      console.log('🚀 WebRTC not initialized for screen share, initializing...');
+      await initializeWebRTC();
+
+      if (!webRTCManagerRef.current) {
+        console.error('❌ Failed to initialize WebRTC for screen share');
+        return false;
+      }
+    }
 
     try {
       console.log('🖥️ Starting screen share...');
@@ -469,17 +550,30 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
       }
       return false;
     }
-  }, [localStream, handleStopScreenShare]);
+  }, [localStream, handleStopScreenShare, initializeWebRTC]);
 
   const stopScreenShare = useCallback(async () => {
     return await handleStopScreenShare();
   }, [handleStopScreenShare]);
 
   const connectToUser = useCallback(async (userId) => {
-    if (webRTCManagerRef.current && localStream && mountedRef.current) {
+    if (!mountedRef.current) return;
+
+    // Ensure WebRTC is initialized
+    if (!webRTCManagerRef.current) {
+      console.log('🚀 WebRTC not initialized for connection, initializing...');
+      await initializeWebRTC();
+
+      if (!webRTCManagerRef.current) {
+        console.error('❌ Failed to initialize WebRTC for connection');
+        return;
+      }
+    }
+
+    if (webRTCManagerRef.current) {
       await webRTCManagerRef.current.connectToUser(userId);
     }
-  }, [localStream]);
+  }, [initializeWebRTC]);
 
   const cleanupWebRTC = useCallback(() => {
     if (webRTCManagerRef.current) {

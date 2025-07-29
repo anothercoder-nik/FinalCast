@@ -42,21 +42,58 @@ class WebRTCManager {
       this.localStream = await mediaManager.getLocalStream();
       
       // Add tracks to existing peer connections
+      console.log(`📤 Adding tracks to ${this.peerConnections.size} existing peer connections`);
       for (const [userId, pc] of this.peerConnections) {
+        console.log(`🔄 Updating tracks for ${userId}`);
         this.localStream.getTracks().forEach(track => {
+          console.log(`➕ Processing ${track.kind} track for ${userId}`);
           const sender = pc.getSenders().find(s => s.track?.kind === track.kind);
           if (sender) {
+            console.log(`🔄 Replacing ${track.kind} track for ${userId}`);
             sender.replaceTrack(track);
           } else {
+            console.log(`➕ Adding new ${track.kind} track for ${userId}`);
             pc.addTrack(track, this.localStream);
           }
         });
       }
       
+      // Notify all existing peer connections about the new stream
+      this.notifyPeerConnectionsOfNewStream();
+
       return this.localStream;
     } catch (error) {
       console.error('❌ Failed to start local stream:', error);
       throw error;
+    }
+  }
+
+  // Method to notify all peer connections when local stream changes
+  notifyPeerConnectionsOfNewStream() {
+    if (!this.localStream || this.peerConnections.size === 0) return;
+
+    console.log(`🔄 Notifying ${this.peerConnections.size} peer connections of new stream`);
+
+    for (const [userId, peerConnection] of this.peerConnections) {
+      console.log(`🔄 Updating tracks for existing connection: ${userId}`);
+
+      // Get current senders
+      const senders = peerConnection.getSenders();
+
+      // Add or replace tracks
+      this.localStream.getTracks().forEach(track => {
+        const existingSender = senders.find(s => s.track?.kind === track.kind);
+
+        if (existingSender) {
+          console.log(`🔄 Replacing ${track.kind} track for ${userId}`);
+          existingSender.replaceTrack(track).catch(err => {
+            console.error(`❌ Failed to replace ${track.kind} track for ${userId}:`, err);
+          });
+        } else {
+          console.log(`➕ Adding new ${track.kind} track for ${userId}`);
+          peerConnection.addTrack(track, this.localStream);
+        }
+      });
     }
   }
 
@@ -79,7 +116,7 @@ class WebRTCManager {
 
   async connectToUser(userId, socketId = null) {
     try {
-      console.log(`🤝 Connecting to user: ${userId}`);
+      console.log(`🤝 Connecting to user: ${userId} (socket: ${socketId})`);
 
       if (this.peerConnections.has(userId)) {
         console.log(`Already connected to ${userId}`);
@@ -89,11 +126,12 @@ class WebRTCManager {
       // Update mapping if socketId provided
       if (socketId) {
         this.updateUserSocketMapping(userId, socketId);
+        console.log(`📝 Updated socket mapping: ${userId} -> ${socketId}`);
       }
 
       // Ensure we have a local stream before creating peer connection
       if (!this.localStream) {
-        console.warn(`⚠️ No local stream available when connecting to ${userId}`);
+        console.warn(`⚠️ No local stream available when connecting to ${userId}, getting one...`);
         // Try to get local stream
         try {
           this.localStream = await mediaManager.getLocalStream();
@@ -103,9 +141,20 @@ class WebRTCManager {
         }
       }
 
+      console.log(`🔧 Creating peer connection for ${userId} with local stream:`, {
+        hasLocalStream: !!this.localStream,
+        localTracks: this.localStream ? this.localStream.getTracks().length : 0
+      });
+
       const peerConnection = await this.createPeerConnection(userId, true);
 
       // Create and send offer
+      console.log(`📋 Creating offer for ${userId} with local stream:`, {
+        hasLocalStream: !!this.localStream,
+        localTracks: this.localStream ? this.localStream.getTracks().length : 0,
+        senders: peerConnection.getSenders().length
+      });
+
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true
@@ -143,23 +192,46 @@ class WebRTCManager {
     this.peerConnections.set(userId, peerConnection);
 
     // Add local stream tracks
-    if (this.localStream) {
-      console.log(`📤 Adding local tracks to peer connection for ${userId}`);
+    if (this.localStream && this.localStream.getTracks().length > 0) {
+      console.log(`📤 Adding ${this.localStream.getTracks().length} local tracks to peer connection for ${userId}`);
       this.localStream.getTracks().forEach(track => {
-        console.log(`➕ Adding ${track.kind} track: ${track.label}`);
+        console.log(`➕ Adding ${track.kind} track: ${track.label} (enabled: ${track.enabled})`);
         peerConnection.addTrack(track, this.localStream);
       });
     } else {
-      console.warn(`⚠️ No local stream available when creating peer connection for ${userId}`);
+      console.warn(`⚠️ No local stream or tracks available when creating peer connection for ${userId}`);
+      // Add empty tracks as placeholders
+      console.log(`📝 Adding placeholder tracks for ${userId}`);
     }
 
     // Handle remote stream
     peerConnection.ontrack = (event) => {
-      console.log('📥 Received remote stream from', userId);
+      console.log('📥 Received remote stream from', userId, {
+        streams: event.streams.length,
+        track: event.track.kind,
+        trackEnabled: event.track.enabled,
+        trackLabel: event.track.label
+      });
+
       const [remoteStream] = event.streams;
-      
-      if (this.callbacks.onRemoteStream) {
-        this.callbacks.onRemoteStream(userId, remoteStream);
+
+      if (remoteStream) {
+        console.log('📊 Remote stream details:', {
+          userId,
+          audioTracks: remoteStream.getAudioTracks().length,
+          videoTracks: remoteStream.getVideoTracks().length,
+          tracks: remoteStream.getTracks().map(t => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            label: t.label
+          }))
+        });
+
+        if (this.callbacks.onRemoteStream) {
+          this.callbacks.onRemoteStream(userId, remoteStream);
+        }
+      } else {
+        console.warn('⚠️ No remote stream in ontrack event for', userId);
       }
     };
 
@@ -251,6 +323,11 @@ class WebRTCManager {
         return;
       }
 
+      console.log(`📋 Creating answer for ${userId} with local stream:`, {
+        hasLocalStream: !!this.localStream,
+        localTracks: this.localStream ? this.localStream.getTracks().length : 0
+      });
+
       const peerConnection = await this.createPeerConnection(userId, false);
       await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
@@ -262,7 +339,7 @@ class WebRTCManager {
         answer: answer
       });
 
-      console.log(`📤 Answer sent to ${userId} (socket: ${senderSocketId})`);
+      console.log(`📤 Answer sent to ${userId} (socket: ${senderSocketId}) with ${peerConnection.getSenders().length} senders`);
 
     } catch (error) {
       console.error(`❌ Failed to handle offer:`, error);
@@ -612,6 +689,5 @@ class WebRTCManager {
     };
   }
 }
-
 
 export default WebRTCManager;
