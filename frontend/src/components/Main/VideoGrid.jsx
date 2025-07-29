@@ -22,31 +22,45 @@ const VideoGrid = ({
   const playVideoSafely = useCallback(async (videoElement, userId) => {
     if (!videoElement || !videoElement.srcObject) return;
 
-    try {
-      // Check if already playing to avoid unnecessary calls
-      if (!videoElement.paused && !videoElement.seeking) {
-        return;
-      }
+    // Check if video is already playing
+    if (!videoElement.paused && !videoElement.ended) {
+      console.log(`📺 Video already playing for ${userId}`);
+      return;
+    }
+    
+    // Prevent multiple concurrent play attempts
+    if (videoElement._isPlaying) {
+      console.log(`📺 Video play already in progress for ${userId}`);
+      return;
+    }
 
+    try {
+      videoElement._isPlaying = true;
       await videoElement.play();
-      console.log(`✅ Remote video playing for ${userId}`);
+      console.log(`✅ Video playing for ${userId}`);
     } catch (error) {
-      // Ignore AbortError as it's expected when video elements are updated rapidly
       if (error.name === 'AbortError') {
-        console.log(`🔄 Video play aborted for ${userId} (expected during updates)`);
-        return;
-      }
-      
-      console.warn(`⚠️ Remote video play failed for ${userId}:`, error.message);
-      
-      // Retry for other errors after a delay
-      if (error.name !== 'NotAllowedError') {
+        console.log(`🔄 Video play aborted for ${userId}, will retry...`);
+        // Retry after a short delay if video is still paused
         setTimeout(() => {
-          if (videoElement.srcObject) {
+          if (videoElement.srcObject && videoElement.paused && !videoElement._isPlaying) {
             playVideoSafely(videoElement, userId);
           }
-        }, 500);
+        }, 100);
+      } else {
+        console.warn(`⚠️ Video play failed for ${userId}:`, error.message);
+        
+        // Retry for other errors after a delay (except user gesture required)
+        if (error.name !== 'NotAllowedError') {
+          setTimeout(() => {
+            if (videoElement.srcObject && videoElement.paused) {
+              playVideoSafely(videoElement, userId);
+            }
+          }, 500);
+        }
       }
+    } finally {
+      videoElement._isPlaying = false;
     }
   }, []);
 
@@ -89,21 +103,22 @@ const VideoGrid = ({
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       console.log('📺 VideoGrid: Updating local video element');
-      localVideoRef.current.srcObject = localStream;
+      
+      // Only update srcObject if it's different
+      if (localVideoRef.current.srcObject !== localStream) {
+        console.log('🎥 Local stream changed, updating video element');
+        localVideoRef.current.srcObject = localStream;
 
-      // Ensure video properties are set
-      localVideoRef.current.muted = true;
-      localVideoRef.current.autoplay = true;
-      localVideoRef.current.playsInline = true;
+        // Ensure video properties are set
+        localVideoRef.current.muted = true;
+        localVideoRef.current.autoplay = true;
+        localVideoRef.current.playsInline = true;
 
-      // Play the video
-      localVideoRef.current.play().then(() => {
-        console.log('✅ VideoGrid: Local video playing');
-      }).catch(error => {
-        console.warn('⚠️ VideoGrid: Local video play failed:', error);
-      });
+        // Use safe play function
+        playVideoSafely(localVideoRef.current, 'local');
+      }
     }
-  }, [localStream, localVideoRef]);
+  }, [localStream, localVideoRef, playVideoSafely]);
 
   const hasVideo = localStream?.getVideoTracks().some(track => track.enabled) || false;
   const hasAudio = localStream?.getAudioTracks().some(track => track.enabled) || false;
