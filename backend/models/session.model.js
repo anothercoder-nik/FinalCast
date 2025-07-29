@@ -38,7 +38,7 @@ const sessionSchema = new mongoose.Schema({
 // Generate unique room ID before saving
 sessionSchema.pre('save', function(next) {
   if (!this.roomId) {
-    this.roomId = crypto.randomBytes(12).toString('hex');
+    this.roomId = crypto.randomBytes(6).toString('hex');
   }
   next();
 });;

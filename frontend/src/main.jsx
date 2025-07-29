@@ -7,6 +7,8 @@ import { routeTree } from './routes/routeTree.js'
 import { ThemeProvider } from './components/utils/theme-provider.jsx'
 import { Provider } from 'react-redux'
 import { store } from './store/store.js'
+import { SocketProvider } from './context/SocketContext.js'
+
 export const queryClient = new QueryClient()
 const router = createRouter({
   routeTree,
@@ -19,11 +21,12 @@ const router = createRouter({
 
 createRoot(document.getElementById('root')).render(
   <Provider store={store}>
-  <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-
-  </ThemeProvider>
+    <SocketProvider>
+      <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </ThemeProvider>
+    </SocketProvider>
   </Provider>
 )

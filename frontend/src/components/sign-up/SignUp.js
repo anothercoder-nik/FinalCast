@@ -133,10 +133,18 @@ export default function SignUp(props) {
         data.get('email')
       );
       
-      console.log('Registration response:', response); // Debug log
-      dispatch(login(response.user));
+      console.log('Registration response:', response);
       
-      // Navigate to dashboard after successful signup
+      // Store token in localStorage for persistence
+      if (response.token) {
+        localStorage.setItem('accessToken', response.token);
+      }
+      
+      dispatch(login({
+        user: response.user,
+        token: response.token
+      }));
+      
       navigate({ to: '/dashboard' });
     } catch (error) {
       console.error('Registration failed:', error);

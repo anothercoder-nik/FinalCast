@@ -10,6 +10,7 @@ const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
   return (
     <div className=' max-w-7xl mx-auto'>
+      <FloatingShapes/>
       <Navbar/>
       <WobbleCardDemo/>
     </div>

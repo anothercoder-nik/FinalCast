@@ -12,7 +12,12 @@ export default function AuthCallback() {
     const handleCallback = async () => {
       try {
         const user = await getCurrentUser();
-        dispatch(login(user));
+        const token = localStorage.getItem('accessToken');
+        
+        dispatch(login({
+          user: user,
+          token: token
+        }));
         navigate({ to: '/' });
       } catch (error) {
         console.error('Auth callback failed:', error);

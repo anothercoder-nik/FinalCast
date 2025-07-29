@@ -3,6 +3,7 @@ import { useSearch } from '@tanstack/react-router'
 import LoginForm from '../components/Forms/LoginForm.jsx'
 import RegisterForm from '../components/Forms/RegisterForm.jsx';
 import { FloatingShapes } from '../components/utils/floating-shapers.jsx';
+import Navbar from '../components/utils/Navbar.jsx';
 
 const AuthPage = () => {
   const search = useSearch({ from: '/auth' });
@@ -15,6 +16,7 @@ const AuthPage = () => {
 
   return (
     <>
+      <FloatingShapes />
      <Navbar />
       {login ? <LoginForm state={setLogin} /> : <RegisterForm state={setLogin} />}
     </>

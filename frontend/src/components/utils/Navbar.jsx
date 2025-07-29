@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { ThemeToggle } from '../ui/theme-toggle'
 import { Link } from '@tanstack/react-router'
@@ -7,6 +7,17 @@ import UserAvatar from '../ui/UserAvatar'
 
 const Navbar = () => {
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
+  const user = useSelector(state => state.auth.user);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Give a brief moment for auth to initialize
+    const timer = setTimeout(() => setIsLoading(false), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Don't render auth buttons during initial load
+  const showAuthButtons = !isLoading && !isAuthenticated;
 
   return (
     <header className='fixed top-6 left-1/2 transform -translate-x-1/2 z-50 text-nowrap'>
@@ -29,6 +40,7 @@ const Navbar = () => {
               className="text-white font-semibold transition-all duration-300 hover:text-cyan-400 cursor-pointer"
             >
               Pricing
+              
             </Link>
             <Link
               href="#contact"
@@ -39,11 +51,10 @@ const Navbar = () => {
         </div>
 
         {isAuthenticated ? (
-          <div className="flex items-center gap-3 ml-10 md:ml-20">
+          <div className="flex bg-blur items-center gap-3 ml-10 md:ml-20">
             <UserAvatar />
           </div>
-        ) : (
-          
+        ) : showAuthButtons ? (
           <div className="flex items-center gap-3 ml-10 md:ml-20 cursor-pointer">
             <Link href='/auth'>
               <Button variant="glass">
@@ -56,6 +67,8 @@ const Navbar = () => {
               </Button>
             </Link>
           </div>
+        ) : (
+          <div className="w-32 h-10"></div> // Placeholder to prevent layout shift
         )}
       </div>
     </header>

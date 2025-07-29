@@ -5,7 +5,7 @@ import { FloatingShapes } from './components/utils/floating-shapers.jsx';
 function RootLayout() {
   return (
 <div className="min-h-screen  bg-stone-950 text-white overflow-x-hidden pt-36">
-  <FloatingShapes/>
+
      <div className="flex-grow">
         <Outlet />
       </div>

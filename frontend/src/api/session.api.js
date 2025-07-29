@@ -14,15 +14,28 @@ export const getSessions = async () => {
   return response.data;
 };
 
-// Get one session by its ID
+// Get session by roomId
+export const getSessionByRoomId = async (roomId) => {
+  const response = await api.get(`/api/sessions/room/${roomId}`);
+  return response.data;
+};
+
+// Get session by ID
 export const getSessionById = async (sessionId) => {
   const response = await api.get(`/api/sessions/${sessionId}`);
   return response.data;
 };
 
 // Join a session by ID
-export const joinSession = async (sessionId) => {
+export const joinSession =
+ async (sessionId) => {
   const response = await api.post(`/api/sessions/${sessionId}/join`);
+  return response.data;
+};
+
+// Join a session by roomId
+export const joinSessionByRoomId = async (roomId) => {
+  const response = await api.post(`/api/sessions/room/${roomId}/join`);
   return response.data;
 };
 
@@ -44,19 +57,8 @@ export const getSessionParticipants = async (sessionId) => {
   return response.data;
 };
 
-// Update participant role (host only)
-export const updateParticipantRole = async (sessionId, participantId, role) => {
-  const response = await api.patch(`/api/sessions/${sessionId}/participants/role`, {
-    participantId,
-    role
-  });
-  return response.data;
-};
-
-// Remove participant (host only)
-export const removeParticipant = async (sessionId, participantId) => {
-  const response = await api.delete(`/api/sessions/${sessionId}/participants/remove`, {
-    data: { participantId }
-  });
+// Delete session
+export const deleteSession = async (sessionId) => {
+  const response = await api.delete(`/api/sessions/${sessionId}`);
   return response.data;
 };

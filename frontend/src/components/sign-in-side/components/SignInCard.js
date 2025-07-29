@@ -71,7 +71,15 @@ export default function SignInCard() {
         data.get('password')
       );
       
-      dispatch(login(response.user));
+      // Store token in localStorage for persistence
+      if (response.token) {
+        localStorage.setItem('accessToken', response.token);
+      }
+      
+      dispatch(login({
+        user: response.user,
+        token: response.token
+      }));
       navigate({ to: '/dashboard' });
     } catch (error) {
       console.error('Login failed:', error);

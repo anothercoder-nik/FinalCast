@@ -32,7 +32,7 @@ export function WobbleCardDemo() {
       className="absolute -right-4 lg:-right-[40%] grayscale filter -bottom-10 object-contain rounded-2xl" />
   </WobbleCard>
 </Link>
-<Link href="#" className="col-span-1 min-h-[300px]">
+<Link href="/join" className="col-span-1 min-h-[300px]">
   <WobbleCard containerClassName="w-full h-full bg-gradient-to-r from-blue-500 to-purple-600" style={{
         backgroundImage: "url(/noise.webp)",
         backgroundSize: "30%",
@@ -60,7 +60,7 @@ export function WobbleCardDemo() {
     </p>
   </WobbleCard>
 </Link>
-<Link href="#" className="col-span-2 min-h-[300px]">
+<Link href="/studios" className="col-span-2 min-h-[300px]">
 <WobbleCard
   containerClassName="col-span-1 lg:col-span-3 bg-gradient-to-l from-blue-500 to-purple-600 min-h-[500px] lg:min-h-[600px] xl:min-h-[300px]"
   style={{
@@ -87,3 +87,4 @@ export function WobbleCardDemo() {
     </div>
   );
 }
+

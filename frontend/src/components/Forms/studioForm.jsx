@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { createSession } from '../../api/session.api';
+import { FloatingShapes } from '../utils/floating-shapers';
 
 const defaultSettings = {
   allowRecording: true,
@@ -9,6 +11,7 @@ const defaultSettings = {
 };
 
 const StudioForm = ({ onCreated }) => {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({
     title: '',
@@ -62,6 +65,15 @@ const StudioForm = ({ onCreated }) => {
     }
   };
 
+  const handleJoinStudio = () => {
+    console.log('Joining studio with roomId:', createdSession?.roomId);
+    if (createdSession?.roomId) {
+      navigate({ to: `/studio/${createdSession.roomId}` });
+    } else {
+      console.error('No roomId found in created session:', createdSession);
+    }
+  };
+
   const resetForm = () => {
     setCurrentStep(1);
     setForm({
@@ -71,6 +83,7 @@ const StudioForm = ({ onCreated }) => {
       maxParticipants: 3,
       settings: { ...defaultSettings },
     });
+
     setCreatedSession(null);
     setError(null);
   };
@@ -219,18 +232,32 @@ const StudioForm = ({ onCreated }) => {
         Your studio is ready! You can now start recording your podcast.
       </p>
 
-      <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-gray-700 rounded-xl p-6 max-w-md mx-auto">
-        <div className="space-y-2 text-sm text-gray-400">
-          <p><span className="font-semibold text-gray-300">Studio ID:</span> {createdSession?._id}</p>
-          <p><span className="font-semibold text-gray-300">Max Participants:</span> {createdSession?.maxParticipants}</p>
-          <p><span className="font-semibold text-gray-300">Created:</span> {new Date().toLocaleDateString()}</p>
+      <div className="bg-gray-800/50 border border-gray-600 rounded-xl p-6 max-w-md mx-auto">
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Room ID:</span>
+            <span className="font-mono text-blue-400 font-bold">{createdSession?.roomId}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Max Participants:</span>
+            <span className="text-white">{createdSession?.maxParticipants}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Status:</span>
+            <span className="text-green-400 capitalize">{createdSession?.status}</span>
+          </div>
         </div>
       </div>
 
       <div className="space-y-3">
-        <button className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg">
-          🎙️ Start Podcast
+        <button 
+          onClick={handleJoinStudio}
+          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold py-4 px-8 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg"
+        >
+          🎙️ Join Studio
         </button>
+
+    
         
         <button 
           onClick={resetForm}
@@ -271,9 +298,10 @@ const StudioForm = ({ onCreated }) => {
   );
 
   return (
-    <div className="h-screen max-h-screen overflow-hidden py-12 px-4">
+    <div className="h-screen max-h-screen overflow-hidden bg-gradient-to-b from-stone-950 to-slate-950 py-12 px-4">
+      
       <div className="max-w-2xl mx-auto h-full flex items-center">
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-slate-900 border border-gray-800 rounded-2xl shadow-2xl p-8 w-full max-h-[90vh] overflow-y-auto">
           {currentStep < 3 && renderProgressSteps()}
           
           {error && (
