@@ -137,15 +137,21 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
 
   // ✅ Fixed initializeWebRTC with proper dependencies
   const initializeWebRTC = useCallback(async () => {
-    if (!socket || !currentUser || !mountedRef.current) {
-      console.warn('Cannot initialize WebRTC: missing requirements');
+    if (!socket || !currentUser || isInitializing) {
+      console.log('⏸️ Skipping WebRTC initialization - missing dependencies or already initializing');
       return;
     }
 
+    // Prevent multiple concurrent initializations
+    if (isInitializing) {
+      console.log('⏸️ WebRTC initialization already in progress');
+      return;
+    }
+
+    console.log('🚀 Initializing WebRTC...');
+    setIsInitializing(true);
+    
     try {
-      if (mountedRef.current) setIsInitializing(true);
-      console.log('🚀 Initializing WebRTC...');
-      
       webRTCManagerRef.current = new WebRTCManager(socket, {
         onRemoteStream: (userId, stream) => {
           console.log('📥 Received remote stream from:', userId);
@@ -207,7 +213,7 @@ export const useWebRTC = (roomId, isJoined, currentUser) => {
         setIsInitializing(false);
       }
     }
-  }, [socket, currentUser]);
+  }, [socket, currentUser, isInitializing]);
 
   // ✅ Fixed useEffect with proper dependencies
   useEffect(() => {

@@ -30,10 +30,13 @@ class WebRTCManager {
     this.socket.on('webrtc-offer', this.handleOffer.bind(this));
     this.socket.on('webrtc-answer', this.handleAnswer.bind(this));
     this.socket.on('webrtc-ice-candidate', this.handleIceCandidate.bind(this));
+    this.socket.on('webrtc-error', this.handleWebRTCError.bind(this));
     this.socket.on('user-left', this.handleUserLeft.bind(this));
     this.socket.on('webrtc-peer-disconnected', this.handlePeerDisconnected.bind(this));
     this.socket.on('webrtc-session-ended', this.handleSessionEnded.bind(this));
     this.socket.on('session-ended', this.handleSessionEnded.bind(this));
+    this.socket.on('reconnect-request', this.handleReconnectRequest.bind(this));
+    this.socket.on('ping-response', this.handlePingResponse.bind(this));
   }
 
   async startLocalStream() {
@@ -66,6 +69,31 @@ class WebRTCManager {
       console.error('❌ Failed to start local stream:', error);
       throw error;
     }
+  }
+
+  // Validate Socket Connection
+  async validateSocketConnection(targetSocketId) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Socket ${targetSocketId} validation timeout`));
+      }, 5000);
+
+      const handlePingResponse = (data) => {
+        if (data.targetSocketId === targetSocketId) {
+          clearTimeout(timeout);
+          this.socket.off('ping-response', handlePingResponse);
+          
+          if (data.status === 'connected') {
+            resolve(true);
+          } else {
+            reject(new Error(`Socket ${targetSocketId} is disconnected`));
+          }
+        }
+      };
+
+      this.socket.on('ping-response', handlePingResponse);
+      this.socket.emit('ping-connection', { targetSocketId });
+    });
   }
 
   // Method to notify all peer connections when local stream changes
@@ -121,6 +149,11 @@ class WebRTCManager {
       if (this.peerConnections.has(userId)) {
         console.log(`Already connected to ${userId}`);
         return;
+      }
+
+      // Validate socket connection before proceeding
+      if (socketId) {
+        await this.validateSocketConnection(socketId);
       }
 
       // Update mapping if socketId provided
@@ -383,10 +416,50 @@ class WebRTCManager {
       if (peerConnection && peerConnection.remoteDescription) {
         await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
         console.log(`🧊 ICE candidate added from ${userId}`);
+      } else {
+        console.warn(`⚠️ Peer connection not ready for ICE candidate from ${userId}, queuing...`);
+        
+        // Queue ICE candidate for later processing
+        if (!this.queuedIceCandidates) {
+          this.queuedIceCandidates = new Map();
+        }
+        
+        if (!this.queuedIceCandidates.has(userId)) {
+          this.queuedIceCandidates.set(userId, []);
+        }
+        
+        this.queuedIceCandidates.get(userId).push(candidate);
+        
+        // Retry after a short delay
+        setTimeout(() => {
+          this.processQueuedIceCandidates(userId);
+        }, 1000);
       }
 
     } catch (error) {
       console.error(`❌ Failed to add ICE candidate:`, error);
+    }
+  }
+
+  // Process Queued ICE Candidates
+  async processQueuedIceCandidates(userId) {
+    const peerConnection = this.peerConnections.get(userId);
+    const queuedCandidates = this.queuedIceCandidates?.get(userId) || [];
+    
+    if (peerConnection && peerConnection.remoteDescription && queuedCandidates.length > 0) {
+      console.log(`🧊 Processing ${queuedCandidates.length} queued ICE candidates for ${userId}`);
+      
+      for (const candidate of queuedCandidates) {
+        try {
+          await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log(`✅ Queued ICE candidate processed for ${userId}`);
+        } catch (error) {
+          console.error(`❌ Failed to process queued ICE candidate for ${userId}:`, error);
+        }
+      }
+      
+      // Clear the queue
+      this.queuedIceCandidates.delete(userId);
     }
   }
 
@@ -422,6 +495,63 @@ class WebRTCManager {
     this.userToSocketMap.clear();
 
     console.log('✅ WebRTC cleanup completed for session end');
+  }
+
+  // New WebRTC Error Handler
+  handleWebRTCError(data) {
+    const { senderSocketId, error, errorType, targetSocketId } = data;
+    console.error(`❌ WebRTC error received:`, { error, errorType, from: senderSocketId });
+    
+    if (this.callbacks.onWebRTCError) {
+      this.callbacks.onWebRTCError(error, errorType, senderSocketId);
+    }
+    
+    // Handle specific error types
+    switch (errorType) {
+      case 'socket_not_found':
+        console.log('🔄 Attempting to refresh socket mapping...');
+        this.refreshSocketMappings();
+        break;
+      case 'validation_error':
+        console.log('⚠️ Data validation failed, retrying with fresh data...');
+        break;
+    }
+  }
+
+  // Reconnection Request Handler
+  handleReconnectRequest(data) {
+    const { fromUserId, fromSocketId, fromUserName } = data;
+    console.log(`🔄 Reconnection request from ${fromUserName} (${fromUserId})`);
+    
+    // Update socket mapping
+    this.updateUserSocketMapping(fromUserId, fromSocketId);
+    
+    // Attempt reconnection
+    setTimeout(() => {
+      this.connectToUser(fromUserId, fromSocketId);
+    }, 1000);
+  }
+
+  // Ping Response Handler
+  handlePingResponse(data) {
+    const { targetSocketId, status, timestamp } = data;
+    console.log(`🏓 Ping response: ${targetSocketId} is ${status}`);
+    
+    if (status === 'disconnected') {
+      const userId = this.getUserIdBySocketId(targetSocketId);
+      if (userId) {
+        this.closePeerConnection(userId);
+      }
+    }
+  }
+
+  // Refresh Socket Mappings
+  refreshSocketMappings() {
+    console.log('🔄 Refreshing socket mappings...');
+    // This would typically involve re-querying the server for current participants
+    if (this.callbacks.onRefreshMappings) {
+      this.callbacks.onRefreshMappings();
+    }
   }
 
   // Connection monitoring and quality assessment
@@ -646,10 +776,18 @@ class WebRTCManager {
       this.socket.off('webrtc-offer');
       this.socket.off('webrtc-answer');
       this.socket.off('webrtc-ice-candidate');
+      this.socket.off('webrtc-error');
       this.socket.off('user-left');
       this.socket.off('webrtc-peer-disconnected');
       this.socket.off('webrtc-session-ended');
       this.socket.off('session-ended');
+      this.socket.off('reconnect-request');
+      this.socket.off('ping-response');
+    }
+
+    // Clear ICE candidate queue
+    if (this.queuedIceCandidates) {
+      this.queuedIceCandidates.clear();
     }
 
     console.log('✅ WebRTC Manager cleanup completed');

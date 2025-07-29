@@ -91,7 +91,18 @@ export default function SignInCard() {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:3000/api/auth/google';
+    // Get API URL for OAuth redirect
+    const getApiUrl = () => {
+      if (import.meta.env.VITE_API_URL) {
+        return import.meta.env.VITE_API_URL;
+      }
+      if (import.meta.env.PROD) {
+        return window.location.origin.replace(/:\d+$/, '') + ':3000';
+      }
+      return 'http://localhost:3000';
+    };
+    
+    window.location.href = `${getApiUrl()}/api/auth/google`;
   };
 
   const validateInputs = () => {

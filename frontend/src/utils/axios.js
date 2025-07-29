@@ -1,8 +1,24 @@
 import axios from 'axios';
 
+// Get API URL based on environment
+const getApiUrl = () => {
+  // Production API URL from environment variable
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Fallback for production (assuming same domain)
+  if (import.meta.env.PROD) {
+    return window.location.origin.replace(/:\d+$/, '') + ':3000';
+  }
+  
+  // Development fallback
+  return "http://localhost:3000";
+};
+
 const axiosInstance = axios.create({
-    baseURL: process.env.BACKEND_URL || "http://localhost:3000",
-    timeout: 10000,
+    baseURL: getApiUrl(),
+    timeout: 30000, // Increased timeout for production
     withCredentials: true
 })
 

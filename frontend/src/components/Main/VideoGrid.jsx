@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, memo, useRef, useCallback } from 'react';
 import { Users } from 'lucide-react';
 import AudioVisualizer from '../ui/AudioVisualizer';
 
@@ -16,6 +16,67 @@ const VideoGrid = ({
   audioLevel = 0,
   isAudioEnabled = false
 }) => {
+  const remoteVideoRefs = useRef(new Map());
+
+  // Safe video play function with AbortError handling
+  const playVideoSafely = useCallback(async (videoElement, userId) => {
+    if (!videoElement || !videoElement.srcObject) return;
+
+    try {
+      // Check if already playing to avoid unnecessary calls
+      if (!videoElement.paused && !videoElement.seeking) {
+        return;
+      }
+
+      await videoElement.play();
+      console.log(`✅ Remote video playing for ${userId}`);
+    } catch (error) {
+      // Ignore AbortError as it's expected when video elements are updated rapidly
+      if (error.name === 'AbortError') {
+        console.log(`🔄 Video play aborted for ${userId} (expected during updates)`);
+        return;
+      }
+      
+      console.warn(`⚠️ Remote video play failed for ${userId}:`, error.message);
+      
+      // Retry for other errors after a delay
+      if (error.name !== 'NotAllowedError') {
+        setTimeout(() => {
+          if (videoElement.srcObject) {
+            playVideoSafely(videoElement, userId);
+          }
+        }, 500);
+      }
+    }
+  }, []);
+
+  // Update remote video elements when streams change
+  useEffect(() => {
+    if (!remoteStreams) return;
+
+    remoteStreams.forEach((stream, userId) => {
+      const videoElement = remoteVideoRefs.current.get(userId);
+      if (videoElement && videoElement.srcObject !== stream) {
+        console.log(`📺 Updating remote video source for ${userId}`);
+        videoElement.srcObject = stream;
+        
+        // Play after metadata is loaded
+        videoElement.onloadedmetadata = () => {
+          playVideoSafely(videoElement, userId);
+        };
+      }
+    });
+  }, [remoteStreams, playVideoSafely]);
+
+  // Cleanup effect
+  useEffect(() => {
+    const videoRefs = remoteVideoRefs.current;
+    return () => {
+      // Clear all video element references on unmount
+      videoRefs.clear();
+    };
+  }, []);
+
   const getGridLayout = () => {
     const totalParticipants = onlineParticipants.length;
     if (totalParticipants <= 1) return 'grid-cols-1';
@@ -47,13 +108,16 @@ const VideoGrid = ({
   const hasVideo = localStream?.getVideoTracks().some(track => track.enabled) || false;
   const hasAudio = localStream?.getAudioTracks().some(track => track.enabled) || false;
 
-  console.log('📺 VideoGrid render:', {
-    localStream: !!localStream,
-    hasVideo,
-    hasAudio,
-    onlineParticipants: onlineParticipants.length,
-    remoteStreams: remoteStreams?.size || 0
-  });
+  // Replace the direct console.log with this useEffect
+  useEffect(() => {
+    console.log('📺 VideoGrid state changed:', {
+      localStream: !!localStream,
+      hasVideo,
+      hasAudio,
+      onlineParticipants: onlineParticipants.length,
+      remoteStreams: remoteStreams?.size || 0
+    });
+  }, [localStream, hasVideo, hasAudio, onlineParticipants.length, remoteStreams?.size]);
 
   return (
     <div className={`flex-1 p-4 ${isFullScreen ? 'p-8' : ''}`}>
@@ -129,28 +193,28 @@ const VideoGrid = ({
                   muted={false}
                   className="w-full h-full object-cover"
                   ref={(videoElement) => {
-                    if (videoElement && stream) {
-                      videoElement.srcObject = stream;
-                      console.log(`📺 Set remote video for ${userId}`);
-
-                      // Force play immediately
-                      const playVideo = async () => {
-                        try {
-                          await videoElement.play();
-                          console.log(`✅ Remote video playing for ${userId}`);
-                        } catch (e) {
-                          console.warn(`⚠️ Remote video play failed for ${userId}:`, e);
-                          // Retry after a short delay
-                          setTimeout(() => {
-                            videoElement.play().catch(err => console.warn('Retry failed:', err));
-                          }, 100);
-                        }
-                      };
-                      playVideo();
+                    if (videoElement) {
+                      // Store the video element reference
+                      remoteVideoRefs.current.set(userId, videoElement);
+                      
+                      // Only set srcObject if it's different to prevent AbortError
+                      if (videoElement.srcObject !== stream) {
+                        console.log(`📺 Set remote video for ${userId}`);
+                        videoElement.srcObject = stream;
+                        
+                        // Use onloadedmetadata instead of immediate play
+                        videoElement.onloadedmetadata = () => {
+                          playVideoSafely(videoElement, userId);
+                        };
+                      }
+                    } else {
+                      // Clean up when element is removed
+                      remoteVideoRefs.current.delete(userId);
                     }
                   }}
-                  onLoadedMetadata={() => console.log(`📺 Remote video loaded for ${userId}`)}
+                  onLoadedMetadata={() => console.log(`📺 Remote video metadata loaded for ${userId}`)}
                   onCanPlay={() => console.log(`📺 Remote video can play for ${userId}`)}
+                  onError={(e) => console.warn(`❌ Remote video error for ${userId}:`, e.target.error)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -173,8 +237,11 @@ const VideoGrid = ({
                 <audio
                   autoPlay
                   ref={(audioElement) => {
-                    if (audioElement && stream) {
+                    if (audioElement && stream && audioElement.srcObject !== stream) {
                       audioElement.srcObject = stream;
+                      audioElement.play().catch(e => 
+                        console.warn(`Audio play failed for ${userId}:`, e.message)
+                      );
                     }
                   }}
                 />
@@ -233,4 +300,4 @@ const VideoGrid = ({
   );
 };
 
-export default VideoGrid;
+export default memo(VideoGrid);

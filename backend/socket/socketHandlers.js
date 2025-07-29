@@ -83,6 +83,17 @@ export const setupSocketHandlers = (io) => {
         const { roomId, userId, userName, sessionId } = data;
         console.log(`🚪 ${userName} joining session ${roomId}`);
         
+        // Check room capacity (adjust as needed)
+        const MAX_PARTICIPANTS = 8;
+        const currentParticipants = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+        if (currentParticipants >= MAX_PARTICIPANTS) {
+          socket.emit('error', { 
+            message: 'Room is full. Maximum participants reached.',
+            code: 'ROOM_FULL'
+          });
+          return;
+        }
+        
         // Check if session is active
         const activeSession = activeSessions.get(roomId);
         if (!activeSession || activeSession.sessionStatus !== 'live') {
@@ -370,6 +381,10 @@ export const setupSocketHandlers = (io) => {
     // TYPING INDICATORS
     socket.on('typing-start', (data) => {
       const { roomId } = data;
+      if (!roomId) {
+        console.warn('⚠️ No roomId provided for typing-start');
+        return;
+      }
       socket.to(roomId).emit('user-typing', {
         userId: socket.userId,
         userName: socket.userName,
@@ -387,40 +402,194 @@ export const setupSocketHandlers = (io) => {
     });
 
     // WebRTC Signaling Handlers
-  socket.on('webrtc-offer', (data) => {
-  const { targetSocketId, offer } = data; // Change from targetUserId to targetSocketId
-  console.log(`📤 Relaying WebRTC offer from ${socket.id} to ${targetSocketId}`);
-  
-  const targetSocket = io.sockets.sockets.get(targetSocketId);
-  if (targetSocket) {
-    targetSocket.emit('webrtc-offer', {
-      senderSocketId: socket.id, // Change from fromUserId to senderSocketId
-      offer: offer
+    socket.on('webrtc-offer', (data) => {
+      const { targetSocketId, offer } = data;
+      
+      if (!targetSocketId || !offer) {
+        console.warn('⚠️ Invalid offer data received');
+        socket.emit('webrtc-error', { 
+          error: 'Invalid offer data', 
+          errorType: 'validation_error' 
+        });
+        return;
+      }
+      
+      console.log(`📤 Relaying WebRTC offer from ${socket.id} to ${targetSocketId}`);
+      
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit('webrtc-offer', {
+          senderSocketId: socket.id,
+          offer: offer
+        });
+        console.log(`✅ Offer relayed successfully: ${socket.id} -> ${targetSocketId}`);
+      } else {
+        console.warn(`⚠️ Target socket ${targetSocketId} not found for offer`);
+        socket.emit('webrtc-error', { 
+          error: 'Target socket not found', 
+          errorType: 'socket_not_found',
+          targetSocketId 
+        });
+      }
     });
-  }
-});
 
-   socket.on('webrtc-answer', (data) => {
-  const { targetSocketId, answer } = data;
-  const targetSocket = io.sockets.sockets.get(targetSocketId);
-  if (targetSocket) {
-    targetSocket.emit('webrtc-answer', {
-      senderSocketId: socket.id, // Change from fromUserId to senderSocketId
-      answer: answer
+    socket.on('webrtc-answer', (data) => {
+      const { targetSocketId, answer } = data;
+      
+      if (!targetSocketId || !answer) {
+        console.warn('⚠️ Invalid answer data received');
+        socket.emit('webrtc-error', { 
+          error: 'Invalid answer data', 
+          errorType: 'validation_error' 
+        });
+        return;
+      }
+      
+      console.log(`📤 Relaying WebRTC answer from ${socket.id} to ${targetSocketId}`);
+      
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit('webrtc-answer', {
+          senderSocketId: socket.id,
+          answer: answer
+        });
+        console.log(`✅ Answer relayed successfully: ${socket.id} -> ${targetSocketId}`);
+      } else {
+        console.warn(`⚠️ Target socket ${targetSocketId} not found for answer`);
+        socket.emit('webrtc-error', { 
+          error: 'Target socket not found', 
+          errorType: 'socket_not_found',
+          targetSocketId 
+        });
+      }
     });
-  }
-});
 
 socket.on('webrtc-ice-candidate', (data) => {
   const { targetSocketId, candidate } = data;
+  
+  if (!targetSocketId || !candidate) {
+    console.warn('⚠️ Invalid ICE candidate data received');
+    return;
+  }
+  
   const targetSocket = io.sockets.sockets.get(targetSocketId);
   if (targetSocket) {
     targetSocket.emit('webrtc-ice-candidate', {
-      senderSocketId: socket.id, // Change from fromUserId to senderSocketId
+      senderSocketId: socket.id,
       candidate: candidate
     });
+    console.log(`🧊 ICE candidate relayed: ${socket.id} -> ${targetSocketId}`);
+  } else {
+    console.warn(`⚠️ Target socket ${targetSocketId} not found for ICE candidate`);
   }
 });
+
+    // WebRTC Connection State Management 
+    socket.on('webrtc-connection-state', (data) => {
+      const { targetSocketId, connectionState, userId } = data;
+      console.log(`🔗 WebRTC connection state: ${socket.id} -> ${targetSocketId}: ${connectionState}`);
+      
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit('webrtc-connection-state', {
+          senderSocketId: socket.id,
+          senderUserId: socket.userId,
+          connectionState
+        });
+      }
+      
+      // Broadcast to room for UI updates
+      if (socket.roomId) {
+        socket.to(socket.roomId).emit('peer-connection-update', {
+          userId: socket.userId,
+          targetUserId: userId,
+          state: connectionState
+        });
+      }
+    });
+
+    // Stream State Management
+    socket.on('stream-state-change', (data) => {
+      const { hasVideo, hasAudio } = data;
+      
+      if (socket.roomId) {
+        socket.to(socket.roomId).emit('participant-stream-update', {
+          userId: socket.userId,
+          userName: socket.userName,
+          hasVideo,
+          hasAudio,
+          timestamp: new Date()
+        });
+        
+        console.log(`📹 Stream update: ${socket.userName} - video: ${hasVideo}, audio: ${hasAudio}`);
+      }
+    });
+
+    // WebRTC Error Handling
+    socket.on('webrtc-error', (data) => {
+      const { targetSocketId, error, errorType } = data;
+      console.error(`❌ WebRTC error from ${socket.id} to ${targetSocketId}:`, error);
+      
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      if (targetSocket) {
+        targetSocket.emit('webrtc-error', {
+          senderSocketId: socket.id,
+          error,
+          errorType
+        });
+      }
+      
+      // Broadcast connection failure to room
+      if (socket.roomId) {
+        socket.to(socket.roomId).emit('peer-connection-failed', {
+          userId: socket.userId,
+          targetSocketId,
+          error: errorType
+        });
+      }
+    });
+
+    // Socket Connection Health Check
+    socket.on('ping-connection', (data) => {
+      const { targetSocketId } = data;
+      const targetSocket = io.sockets.sockets.get(targetSocketId);
+      
+      if (targetSocket) {
+        socket.emit('ping-response', { 
+          targetSocketId, 
+          status: 'connected',
+          timestamp: new Date()
+        });
+      } else {
+        socket.emit('ping-response', { 
+          targetSocketId, 
+          status: 'disconnected',
+          timestamp: new Date()
+        });
+      }
+    });
+
+    // WebRTC Reconnection Request
+    socket.on('request-reconnect', (data) => {
+      const { targetUserId } = data;
+      const targetSocket = findSocketByUserId(targetUserId);
+      
+      if (targetSocket) {
+        targetSocket.emit('reconnect-request', {
+          fromUserId: socket.userId,
+          fromSocketId: socket.id,
+          fromUserName: socket.userName
+        });
+        
+        console.log(`🔄 Reconnect request: ${socket.userName} -> ${targetUserId}`);
+      } else {
+        socket.emit('webrtc-error', {
+          error: 'Target user not found for reconnection',
+          errorType: 'user_not_found',
+          targetUserId
+        });
+      }
+    });
 
     // Helper function to find socket by userId
     function findSocketByUserId(userId) {
@@ -438,6 +607,13 @@ socket.on('webrtc-ice-candidate', (data) => {
       
       if (socket.roomId && socket.userId) {
         const activeSession = activeSessions.get(socket.roomId);
+        
+        // Broadcast WebRTC cleanup to all room participants
+        socket.to(socket.roomId).emit('webrtc-peer-disconnected', {
+          userId: socket.userId,
+          socketId: socket.id,
+          reason: 'socket_disconnect'
+        });
         
         // If host disconnects, end the session
         if (activeSession && activeSession.hostId === socket.userId) {

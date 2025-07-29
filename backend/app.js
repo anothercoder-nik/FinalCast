@@ -35,16 +35,40 @@ app.use(passport.initialize());
 const allowedOrigins = [
     "http://localhost:5173",
     "http://localhost:3000",
-    process.env.FRONTEND_URL
-];
+    process.env.FRONTEND_URL,
+    // Add common production patterns
+    ...(process.env.FRONTEND_URL ? [
+      process.env.FRONTEND_URL.replace(/\/$/, ''), // Remove trailing slash
+      process.env.FRONTEND_URL.replace(/https?:\/\//, 'https://'), // Ensure HTTPS
+    ] : []),
+    // Allow Render.com domains if deploying there
+    /https:\/\/.*\.onrender\.com$/,
+    // Allow Vercel domains if deploying there
+    /https:\/\/.*\.vercel\.app$/,
+    // Allow Netlify domains if deploying there
+    /https:\/\/.*\.netlify\.app$/
+].filter(Boolean); // Remove undefined values
 
 app.use(cors({
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    
+    // Check if origin matches any allowed origins
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`🚫 CORS blocked origin: ${origin}`);
+      callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
   credentials: true,
@@ -53,11 +77,28 @@ app.use(cors({
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin
+      if (!origin) return callback(null, true);
+      
+      // Check if origin matches any allowed origins
+      const isAllowed = allowedOrigins.some(allowedOrigin => {
+        if (typeof allowedOrigin === 'string') {
+          return allowedOrigin === origin;
+        } else if (allowedOrigin instanceof RegExp) {
+          return allowedOrigin.test(origin);
+        }
+        return false;
+      });
+      
+      callback(null, isAllowed);
+    },
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Use the socket handler HERE

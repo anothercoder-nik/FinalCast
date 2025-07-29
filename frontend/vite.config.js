@@ -17,9 +17,20 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: false,
-
     cors: true,
-    
+  },
+  // SPA fallback for production deployment
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+  },
+  // Ensure all routes fall back to index.html
+  preview: {
+    port: 5173,
+    host: '0.0.0.0',
   },
   define: {
     global: 'globalThis',

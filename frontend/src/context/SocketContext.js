@@ -26,7 +26,23 @@ export const SocketProvider = ({ children }) => {
     if (currentUser && !socketRef.current) {
       console.log('🔌 Initializing socket connection...');
       
-      const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+      // Get socket URL based on environment
+      const getSocketUrl = () => {
+        // Use environment variable if available
+        if (import.meta.env.VITE_API_URL) {
+          return import.meta.env.VITE_API_URL;
+        }
+        
+        // Production: assume same domain with backend port
+        if (import.meta.env.PROD) {
+          return window.location.origin.replace(/:\d+$/, '') + ':3000';
+        }
+        
+        // Development fallback
+        return 'http://localhost:3000';
+      };
+      
+      const newSocket = io(getSocketUrl(), {
         transports: ['websocket', 'polling'],
         withCredentials: true,
         autoConnect: true,
