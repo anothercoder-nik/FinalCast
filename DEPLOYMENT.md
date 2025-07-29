@@ -41,11 +41,28 @@ VITE_API_URL=https://finalcast1.onrender.com
 PORT=3000
 NODE_ENV=production
 FRONTEND_URL=https://finalcast.onrender.com
+BACKEND_URL=https://finalcast1.onrender.com
+GOOGLE_CALLBACK_URL=https://finalcast1.onrender.com/api/auth/google/callback
 MONGODB_URI=your-production-mongodb-uri
 JWT_SECRET=your-secure-jwt-secret
 GOOGLE_CLIENT_ID=your-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
 ```
+
+## Google OAuth Configuration Fix
+
+**Problem**: "Access blocked: This app's request is invalid"
+
+**Solution**: Update Google Cloud Console with production URLs:
+
+1. **Authorized JavaScript Origins**:
+   - `https://finalcast.onrender.com`
+   - `https://finalcast1.onrender.com`
+
+2. **Authorized Redirect URIs**:
+   - `https://finalcast1.onrender.com/api/auth/google/callback`
+
+See `GOOGLE_OAUTH_FIX.md` for detailed setup instructions.
 
 ## Deployment Steps
 
