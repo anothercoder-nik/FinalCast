@@ -11,6 +11,15 @@ class WebRTCManager {
     this.reconnectionAttempts = new Map(); // userId -> attempt count
     this.localStream = null;
 
+    // Initialize mediaManager reference immediately
+    try {
+      this.mediaManager = mediaManager;
+      console.log('📋 MediaManager set in constructor:', !!this.mediaManager, typeof this.mediaManager?.getLocalStream);
+    } catch (error) {
+      console.error('❌ Failed to set mediaManager in constructor:', error);
+      this.mediaManager = null;
+    }
+
     // Detect mobile device
     this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -29,16 +38,49 @@ class WebRTCManager {
     this.setupSocketListeners();
     this.startConnectionMonitoring();
     
-    // Immediately start local stream when manager is created
-    this.initializeLocalStream();
+    // Initialize mediaManager and start local stream (async)
+    this.initializeManager();
+  }
+
+  async initializeManager() {
+    try {
+      console.log('🚀 Initializing WebRTC Manager...');
+      
+      // Double-check mediaManager is available
+      if (!this.mediaManager) {
+        console.warn('⚠️ MediaManager not set in constructor, trying to get it again...');
+        try {
+          this.mediaManager = mediaManager;
+          console.log('📋 MediaManager set from retry:', !!this.mediaManager);
+        } catch (retryError) {
+          console.error('❌ Failed to get mediaManager on retry:', retryError);
+          return;
+        }
+      }
+      
+      if (!this.mediaManager || typeof this.mediaManager.getLocalStream !== 'function') {
+        console.error('❌ MediaManager is not valid or missing getLocalStream method');
+        return;
+      }
+      
+      console.log('✅ MediaManager is ready, initializing local stream...');
+      
+      // Start local stream initialization
+      await this.initializeLocalStream();
+    } catch (error) {
+      console.error('❌ Failed to initialize WebRTC Manager:', error);
+    }
   }
 
   async initializeLocalStream() {
     try {
       console.log('🎥 Initializing local stream on WebRTC Manager creation...');
-      // Import mediaManager dynamically
-      const { mediaManager } = await import('./mediaManager.js');
-      this.localStream = await mediaManager.getLocalStream();
+      if (!this.mediaManager) {
+        console.error('❌ MediaManager not available');
+        return;
+      }
+      
+      this.localStream = await this.mediaManager.getLocalStream();
       console.log('✅ Local stream initialized on manager creation:', {
         audioTracks: this.localStream.getAudioTracks().length,
         videoTracks: this.localStream.getVideoTracks().length
@@ -74,8 +116,12 @@ class WebRTCManager {
   async startLocalStream() {
     try {
       console.log('📹 WebRTC Manager requesting local stream...');
-      const { mediaManager } = await import('./mediaManager.js');
-      this.localStream = await mediaManager.getLocalStream();
+      if (!this.mediaManager) {
+        console.error('❌ MediaManager not available');
+        throw new Error('MediaManager not initialized');
+      }
+      
+      this.localStream = await this.mediaManager.getLocalStream();
       
       // Add tracks to existing peer connections
       console.log(`📤 Adding tracks to ${this.peerConnections.size} existing peer connections`);
@@ -216,8 +262,11 @@ class WebRTCManager {
         // If still no local stream, try to get one
         if (!this.localStream) {
           try {
-            const { mediaManager } = await import('./mediaManager.js');
-            this.localStream = await mediaManager.getLocalStream();
+            if (!this.mediaManager) {
+              console.error('❌ MediaManager not available for connection');
+              return;
+            }
+            this.localStream = await this.mediaManager.getLocalStream();
             console.log('✅ Got local stream for peer connection');
           } catch (streamError) {
             console.error('❌ Failed to get local stream:', streamError);
@@ -453,14 +502,17 @@ class WebRTCManager {
       if (!this.localStream) {
         console.warn(`⚠️ No local stream available when handling offer from ${userId}, getting one...`);
         try {
-          // Import mediaManager dynamically or ensure it's available
-          const { mediaManager } = await import('./mediaManager.js');
-          this.localStream = await mediaManager.getLocalStream();
-          console.log('✅ Got local stream for peer connection in handleOffer');
-          
-          // Notify callback that local stream is ready
-          if (this.callbacks.onLocalStreamReady) {
-            this.callbacks.onLocalStreamReady(this.localStream);
+          if (!this.mediaManager) {
+            console.error('❌ MediaManager not available for offer handling');
+            // Continue anyway, the connection might work for receiving only
+          } else {
+            this.localStream = await this.mediaManager.getLocalStream();
+            console.log('✅ Got local stream for peer connection in handleOffer');
+            
+            // Notify callback that local stream is ready
+            if (this.callbacks.onLocalStreamReady) {
+              this.callbacks.onLocalStreamReady(this.localStream);
+            }
           }
         } catch (streamError) {
           console.error('❌ Failed to get local stream in handleOffer:', streamError);
@@ -774,7 +826,11 @@ class WebRTCManager {
   async startScreenShare() {
     try {
       console.log('🖥️ WebRTC Manager starting screen share...');
-      const screenStream = await mediaManager.getScreenShare();
+      if (!this.mediaManager) {
+        throw new Error('MediaManager not available for screen share');
+      }
+      
+      const screenStream = await this.mediaManager.getScreenShare();
       const videoTrack = screenStream.getVideoTracks()[0];
 
       if (!videoTrack) {
@@ -822,11 +878,15 @@ class WebRTCManager {
     try {
       console.log('🖥️ WebRTC Manager stopping screen share...');
 
+      if (!this.mediaManager) {
+        throw new Error('MediaManager not available for stopping screen share');
+      }
+
       // Stop screen share in media manager
-      mediaManager.stopScreenShare();
+      this.mediaManager.stopScreenShare();
 
       // Get camera stream again
-      const cameraStream = await mediaManager.getLocalStream();
+      const cameraStream = await this.mediaManager.getLocalStream();
       const videoTrack = cameraStream.getVideoTracks()[0];
 
       if (!videoTrack) {
