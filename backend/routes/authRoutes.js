@@ -21,12 +21,12 @@ router.get('/google', google_user);
     '/google/callback',
     passport.authenticate('google', { 
       session: false,
-      failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth` 
+      failureRedirect: `${process.env.FRONTEND_URL}/auth` 
     }),
     async (req, res) => {
       const token = signToken({id: req.user._id});
       res.cookie("accessToken", token, cookieOptions);
-      res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`);
+      res.redirect(`${process.env.FRONTEND_URL}/dashboard`);
     }
 
   );
