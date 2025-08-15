@@ -156,18 +156,26 @@ export default function SignUp(props) {
   };
 
   const handleGoogleSignup = () => {
-    // Get API URL for OAuth redirect
+    // Get API URL for OAuth redirect - use centralized config
     const getApiUrl = () => {
       if (import.meta.env.VITE_API_URL) {
+        console.log('🔧 SignUp using VITE_API_URL:', import.meta.env.VITE_API_URL);
         return import.meta.env.VITE_API_URL;
       }
       if (import.meta.env.PROD) {
+        console.warn('⚠️ SignUp: VITE_API_URL not set in production!');
+        // For your specific deployment
+        if (window.location.hostname.includes('finalcast.tech')) {
+          return 'https://api.finalcast.tech';
+        }
         return window.location.origin.replace(/:\d+$/, '') + ':3000';
       }
       return 'http://localhost:3000';
     };
-    
-    window.location.href = `${getApiUrl()}/api/auth/google`;
+
+    const apiUrl = getApiUrl();
+    console.log('🔧 SignUp redirecting to:', `${apiUrl}/api/auth/google`);
+    window.location.href = `${apiUrl}/api/auth/google`;
   };
 
   return (

@@ -10,35 +10,35 @@
 export const getApiUrl = () => {
   // Production API URL from environment variable
   if (import.meta.env.VITE_API_URL) {
+    console.log('🔧 Using VITE_API_URL:', import.meta.env.VITE_API_URL);
     return import.meta.env.VITE_API_URL;
   }
-  
-  // Fallback for production deployment (assuming backend on same domain with different port)
-  if (import.meta.env.PROD) {
-    // For production, try to infer backend URL from current domain
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    
-    // Common production scenarios:
-    // 1. Same domain, different port (e.g., https://app.com:3000)
-    // 2. Subdomain (e.g., https://api.app.com)
-    // 3. Different domain entirely (should be set in VITE_API_URL)
-    
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3000';
-    }
-    
-    // Try subdomain approach first
-    if (!hostname.startsWith('api.')) {
-      return `${protocol}//api.${hostname}`;
-    }
-    
-    // Fallback to same domain with port 3000
-    return `${protocol}//${hostname}:3000`;
-  }
-  
+
   // Development fallback
-  return 'http://localhost:3000';
+  if (!import.meta.env.PROD) {
+    console.log('🔧 Using development fallback: http://localhost:3000');
+    return 'http://localhost:3000';
+  }
+
+  // Production fallback - this should NOT be reached if VITE_API_URL is properly set
+  console.warn('⚠️ VITE_API_URL not set in production! Using fallback logic.');
+  console.warn('⚠️ Please set VITE_API_URL=https://api.finalcast.tech in your deployment environment');
+
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+
+  // For your specific deployment, if frontend is on finalcast.tech and backend is on api.finalcast.tech
+  if (hostname.includes('finalcast.tech') && !hostname.startsWith('api.')) {
+    return `${protocol}//api.finalcast.tech`;
+  }
+
+  // Generic fallback for other domains
+  if (!hostname.startsWith('api.')) {
+    return `${protocol}//api.${hostname}`;
+  }
+
+  // Last resort fallback
+  return `${protocol}//${hostname}:3000`;
 };
 
 /**
