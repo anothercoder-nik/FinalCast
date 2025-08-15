@@ -90,20 +90,15 @@ export default function SignInCard() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Get API URL for OAuth redirect
-    const getApiUrl = () => {
-      if (import.meta.env.VITE_API_URL) {
-        return import.meta.env.VITE_API_URL;
-      }
-      if (import.meta.env.PROD) {
-        return window.location.origin.replace(/:\d+$/, '') + ':3000';
-      }
-      return 'http://localhost:3000';
-    };
-    
-    window.location.href = `${getApiUrl()}/api/auth/google`;
-  };
+ const handleGoogleLogin = () => {
+  const apiUrl = import.meta.env.VITE_API_URL
+    || (import.meta.env.PROD 
+        ? `${window.location.origin.replace(/:\d+$/, '')}:3000`
+        : 'http://localhost:3000');
+
+  window.location.href = `${apiUrl}/api/auth/google`;
+};
+
 
   const validateInputs = () => {
     const email = document.getElementById('email');
